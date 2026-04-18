@@ -1,8 +1,5 @@
 """相对时间格式化工具。
 
-DEPRECATED: 本模块已废弃。核心层数据现通过 Backend HTTP API (GET /api/core/identity) 获取。
-参见 Memory/api/memory_api.py load_core()。
-
 为 AI 上下文提供人类可读的相对时间标注，
 帮助 LLM 准确感知事件发生的时间距离。
 

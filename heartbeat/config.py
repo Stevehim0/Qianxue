@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HeartbeatConfig:
     """心跳服务配置。"""
+    enabled: bool = True
     interval: int = 10
     backend_url: str = "http://localhost:8000"
 
@@ -30,6 +31,7 @@ def load_config(config_path: Optional[str] = None) -> HeartbeatConfig:
         return HeartbeatConfig()
 
     return HeartbeatConfig(
+        enabled=data.get("enabled", True),
         interval=data.get("interval", 10),
         backend_url=data.get("backend_url", "http://localhost:8000"),
     )

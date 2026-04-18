@@ -220,8 +220,8 @@ async def get_stats():
     try:
         conn = await get_db()
 
-        # 统计用户数
-        cursor = await conn.execute("SELECT COUNT(*) FROM users")
+        # 统计用户数（排除机器人）
+        cursor = await conn.execute("SELECT COUNT(*) FROM users WHERE user_type != 'robot'")
         user_count = (await cursor.fetchone())[0]
 
         # 统计群聊数
@@ -249,4 +249,4 @@ async def get_stats():
 
 
 # 导入config_manager避免循环导入
-from backend.config import config_manager
+from backend.db_config import config_manager

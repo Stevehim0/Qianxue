@@ -8,12 +8,13 @@ from typing import Optional
 from Memory.llm.base import BaseLLMClient
 from Memory.llm.qianwen_client import QianwenClient
 from Memory.llm.deepseek_client import DeepSeekClient
+from Memory.llm.openai_compatible_client import OpenAICompatibleClient
 
 
 class LLMFactory:
     """LLM客户端工厂类。
 
-    提供统一的接口创建千问或DeepSeek客户端，支持自动选择。
+    提供统一的接口创建不同提供商的LLM客户端，支持自动选择。
 
     Examples:
         >>> # 自动选择（默认千问）
@@ -24,12 +25,17 @@ class LLMFactory:
         >>>
         >>> # 指定DeepSeek
         >>> client = LLMFactory.create_client(provider="deepseek")
+        >>>
+        >>> # 通用 OpenAI 兼容（需传 base_url 和 model）
+        >>> client = LLMFactory.create_client(provider="openai_compatible",
+        ...     base_url="https://api.openai.com/v1", model="gpt-4o")
     """
 
     # 支持的客户端类型
     _clients = {
         "qianwen": QianwenClient,
         "deepseek": DeepSeekClient,
+        "openai_compatible": OpenAICompatibleClient,
     }
 
     @classmethod

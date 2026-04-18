@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+from backend.config import settings
 from backend.services.agent.message import AgentMessage
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,7 @@ logger = logging.getLogger(__name__)
 class SleepManager:
     """AI 睡眠状态管理器。"""
 
-    enabled: bool = False  # 设为 True 启用睡眠节律
-    WIND_DOWN_HOUR = 23
-    SLEEP_HOUR = 0
-    WAKE_HOUR = 8
+    enabled: bool = settings.sleep.enabled
 
     def __init__(self):
         self._private_queue: Dict[str, List[Tuple[AgentMessage, str]]] = {}
@@ -61,25 +59,25 @@ class SleepManager:
         today = datetime.now().strftime("%Y-%m-%d")
         prev = self._state
 
-        if self.WAKE_HOUR <= hour < self.WIND_DOWN_HOUR:
+        if settings.sleep.wake_hour <= hour < settings.sleep.wind_down_hour:
             # 08:00 ~ 22:59 → 清醒
             if self._state != "AWAKE":
                 logger.info(f"睡眠状态转换: {self._state} → AWAKE")
                 self._state = "AWAKE"
                 self._energy_label = "充沛"
-                self._sync_state_api(0.8, "充沛")
+                self._sync_state_api(settings.sleep.awake_energy_value, settings.sleep.awake_energy_label)
                 return True
 
-        elif hour >= self.WIND_DOWN_HOUR:
+        elif hour >= settings.sleep.wind_down_hour:
             # 23:00 ~ 23:59 → 困倦
             if self._state == "AWAKE" and self._last_wind_down_date != today:
                 self._last_wind_down_date = today
                 logger.info("睡眠状态转换: AWAKE → WINDING_DOWN")
                 self._state = "WINDING_DOWN"
                 self._energy_label = "困倦"
-                self._sync_state_api(0.3, "困倦")
+                self._sync_state_api(settings.sleep.tired_energy_value, settings.sleep.tired_energy_label)
 
-        elif hour < self.WAKE_HOUR:
+        elif hour < settings.sleep.wake_hour:
             # 00:00 ~ 07:59 → 睡眠
             if self._state != "ASLEEP":
                 logger.info(f"睡眠状态转换: {self._state} → ASLEEP")
@@ -179,7 +177,7 @@ async def run_sleep_cycle() -> None:
                 await sleep_manager.handle_wake_up()
         except Exception as e:
             logger.error(f"睡眠周期检查异常: {e}")
-        await asyncio.sleep(60)
+        await asyncio.sleep(settings.sleep.check_interval)
 
 
 # 模块级单例

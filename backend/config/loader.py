@@ -9,7 +9,7 @@
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -49,7 +49,6 @@ class LLMProviderConfig:
 @dataclass
 class LLMConfig:
     thinking_provider: LLMProviderConfig = field(default_factory=LLMProviderConfig)
-    speaking_provider: LLMProviderConfig = field(default_factory=LLMProviderConfig)
     anthropic_max_tokens: int = 1024
     api_timeout: float = 120.0
 
@@ -161,6 +160,42 @@ class Settings:
     vision: VisionConfig = field(default_factory=VisionConfig)
     context: ContextConfig = field(default_factory=ContextConfig)
 
+    _SECTION_FIELDS: Dict[str, type] = None  # type: ignore
+
+    @classmethod
+    def section_names(cls) -> List[str]:
+        return ["llm", "server", "memory", "brain", "sleep", "napcat", "admin", "vision", "context"]
+
+    @classmethod
+    def section_dc_class(cls, section: str) -> type:
+        mapping = {
+            "llm": LLMConfig, "server": ServerConfig, "memory": MemoryConfig,
+            "brain": BrainConfig, "sleep": SleepConfig, "napcat": NapCatConfig,
+            "admin": AdminConfig, "vision": VisionConfig, "context": ContextConfig,
+        }
+        return mapping.get(section)
+
+    def update_section(self, section: str, data: Dict[str, Any]):
+        """用 dict 热更新指定 section，只更新匹配 dataclass 字段的 key。"""
+        dc = getattr(self, section, None)
+        if dc is None:
+            return
+        valid_keys = {f.name for f in fields(dc)}
+        for k, v in data.items():
+            if k in valid_keys:
+                current = getattr(dc, k)
+                # 类型对齐：保持原类型
+                if isinstance(current, bool):
+                    setattr(dc, k, bool(v))
+                elif isinstance(current, int):
+                    setattr(dc, k, int(v))
+                elif isinstance(current, float):
+                    setattr(dc, k, float(v))
+                elif isinstance(current, str):
+                    setattr(dc, k, str(v))
+                else:
+                    setattr(dc, k, v)
+
 
 # ---------------------------------------------------------------------------
 # ConfigLoader
@@ -180,7 +215,7 @@ class ConfigLoader:
         self._load_yaml_files()
 
         if not self._raw:
-            self._try_legacy_config()
+            logger.warning("No config files found in %s", self._config_dir)
 
         self._apply_env_overrides()
         return self._build_settings()
@@ -202,25 +237,6 @@ class ConfigLoader:
             except Exception as e:
                 logger.warning(f"Failed to load {yaml_file.name}: {e}")
                 self._raw[name] = {}
-
-    def _try_legacy_config(self):
-        legacy_path = Path(__file__).parent.parent / "llm_config.yaml"
-        if not legacy_path.exists():
-            return
-        try:
-            with open(legacy_path, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            self._raw["llm"] = {
-                "thinking_provider": data.get("thinking_provider", {}),
-                "speaking_provider": data.get("speaking_provider", {}),
-            }
-            self._raw["brain"] = {"brain": {"max_iterations": data.get("brain", {}).get("max_iterations", 5)}}
-            self._raw["napcat"] = {"napcat": {"http_url": data.get("napcat", {}).get("http_url", "http://localhost:3000")}}
-            self._raw["memory"] = {"memory": {"service_url": data.get("memory", {}).get("service_url", "http://localhost:8001")}}
-            self._raw["admin"] = {"admin": {"qq_id": data.get("admin", {}).get("qq_id", "")}}
-            logger.info("Loaded legacy llm_config.yaml")
-        except Exception as e:
-            logger.warning(f"Failed to load legacy config: {e}")
 
     def _apply_env_overrides(self):
         # 向后兼容：MEMORY_SERVICE_URL
@@ -276,17 +292,11 @@ class ConfigLoader:
     def _build_llm(self) -> LLMConfig:
         r = self._raw.get("llm", {})
         tp = r.get("thinking_provider", {})
-        sp = r.get("speaking_provider", {})
         return LLMConfig(
             thinking_provider=LLMProviderConfig(
                 api_key=tp.get("api_key", ""),
                 base_url=tp.get("base_url", ""),
                 model=tp.get("model", ""),
-            ),
-            speaking_provider=LLMProviderConfig(
-                api_key=sp.get("api_key", ""),
-                base_url=sp.get("base_url", ""),
-                model=sp.get("model", ""),
             ),
             anthropic_max_tokens=r.get("anthropic", {}).get("max_tokens", 1024),
             api_timeout=r.get("api_timeout", 120.0),
@@ -410,6 +420,31 @@ class ConfigLoader:
 
 def load_settings(config_dir: Optional[str] = None) -> Settings:
     return ConfigLoader(config_dir).load()
+
+
+def save_thinking_provider(api_key: str, base_url: str, model: str):
+    """将 thinking_provider 配置持久化写回 llm.yaml。"""
+    config_dir = Path(__file__).parent
+    llm_path = config_dir / "llm.yaml"
+
+    with open(llm_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    tp = data.setdefault("thinking_provider", {})
+    if api_key:
+        tp["api_key"] = api_key
+    tp["base_url"] = base_url
+    tp["model"] = model
+
+    with open(llm_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+
+    # 同步更新内存中的 settings
+    settings.llm.thinking_provider = LLMProviderConfig(
+        api_key=api_key, base_url=base_url, model=model
+    )
+
+    logger.info(f"Thinking provider persisted to llm.yaml: {base_url} / {model}")
 
 
 settings: Settings = load_settings()

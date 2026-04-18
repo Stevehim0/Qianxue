@@ -5,19 +5,16 @@
 2. 将全局实例 memory_provider 替换为新实现
 """
 
-import os
 import logging
 from datetime import datetime
 from typing import Optional, List
 
 import httpx
 
+from backend.config import settings
 from backend.database.models import UserProfile, RetrievedMemory, UserMemory
 
 logger = logging.getLogger(__name__)
-
-# Memory service URL from environment
-MEMORY_SERVICE_URL = os.getenv("MEMORY_SERVICE_URL", "http://localhost:8001")
 
 
 class MemoryProvider:
@@ -71,8 +68,8 @@ class QianxueMemoryProvider(MemoryProvider):
     通过HTTP调用独立的Memory HTTP服务。
     """
 
-    def __init__(self, base_url: str = MEMORY_SERVICE_URL):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str = ""):
+        self.base_url = (base_url or settings.memory.service_url).rstrip("/")
         # Use a single httpx client for connection pooling
         self._client: Optional[httpx.AsyncClient] = None
         self._nickname_map: dict[str, str] = {}  # user_id -> nickname cache
@@ -81,7 +78,12 @@ class QianxueMemoryProvider(MemoryProvider):
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
-                timeout=httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0),
+                timeout=httpx.Timeout(
+                    connect=settings.memory.provider_connect_timeout,
+                    read=settings.memory.provider_read_timeout,
+                    write=settings.memory.provider_write_timeout,
+                    pool=settings.memory.provider_pool_timeout,
+                ),
             )
         return self._client
 

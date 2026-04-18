@@ -55,7 +55,7 @@ class MemoryAPI:
         from Memory.storage.profile_store import profile_store
         from Memory.embedding import embedding_service
         from Memory.embedding.vector_store import vector_store
-        from Memory.llm import QianwenClient
+        from Memory.llm import LLMFactory
 
         # 创建 ProfileManager（个人档案管理器，先于 Pipeline 创建）
         self.profile_manager = ProfileManager(
@@ -83,7 +83,14 @@ class MemoryAPI:
         self.state_manager = DefaultStateManager()
 
         # 创建 RecallManager（注入 ProfileManager 和 LLM client）
-        self._llm_client = QianwenClient()
+        # 根据配置创建 LLM 客户端
+        provider = settings.models.llm_provider or "qianwen"
+        llm_kwargs = {}
+        if provider == "openai_compatible" and settings.models.llm_base_url:
+            llm_kwargs["base_url"] = settings.models.llm_base_url
+            if settings.models.llm_model:
+                llm_kwargs["model"] = settings.models.llm_model
+        self._llm_client = LLMFactory.create_client(provider=provider, **llm_kwargs)
         self.recall_manager = RecallManager(
             experience_store=experience_store,
             entity_store=entity_store,

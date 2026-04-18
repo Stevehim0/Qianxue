@@ -416,3 +416,99 @@ async def trigger_stm_compression():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy", "memory_api_initialized": _memory_api is not None}
+
+
+@app.post("/api/config/llm")
+async def update_memory_llm_config(request: dict):
+    """更新 Memory 系统的 LLM 配置（API Key / Base URL / Provider / Model），并写入 .env 持久化。"""
+    from Memory.config.settings import settings
+    from Memory.llm import LLMFactory
+    from pathlib import Path
+
+    api_key = request.get("api_key", "")
+    base_url = request.get("base_url", "")
+    provider = request.get("provider", "")
+    model = request.get("model", "")
+
+    need_recreate = False
+
+    if api_key:
+        settings.models.llm_api_key = api_key
+        need_recreate = True
+    if base_url:
+        settings.models.llm_base_url = base_url
+        need_recreate = True
+    if provider:
+        settings.models.llm_provider = provider
+        need_recreate = True
+    if model:
+        settings.models.llm_model = model
+        need_recreate = True
+
+    # 重建 LLM 客户端
+    if need_recreate and _memory_api:
+        p = settings.models.llm_provider or "qianwen"
+        llm_kwargs = {}
+        if p == "openai_compatible" and settings.models.llm_base_url:
+            llm_kwargs["base_url"] = settings.models.llm_base_url
+            if settings.models.llm_model:
+                llm_kwargs["model"] = settings.models.llm_model
+        try:
+            _memory_api._llm_client = LLMFactory.create_client(provider=p, **llm_kwargs)
+        except Exception as e:
+            logger.warning(f"Failed to recreate LLM client: {e}")
+
+    # 写入 .env 持久化
+    env_path = Path(__file__).parent.parent / ".env"
+    lines = []
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    keys_written = set()
+    new_lines = []
+    env_vars = {}
+    if api_key:
+        env_vars["LLM_API_KEY"] = api_key
+    if base_url:
+        env_vars["LLM_BASE_URL"] = base_url
+    if provider:
+        env_vars["LLM_PROVIDER"] = provider
+    if model:
+        env_vars["LLM_MODEL"] = model
+    for line in lines:
+        stripped = line.strip()
+        matched = False
+        for key_name in env_vars:
+            if stripped.startswith(f"{key_name}="):
+                new_lines.append(f"{key_name}={env_vars[key_name]}\n")
+                keys_written.add(key_name)
+                matched = True
+                break
+        if not matched:
+            new_lines.append(line)
+    for key_name, val in env_vars.items():
+        if key_name not in keys_written:
+            new_lines.append(f"{key_name}={val}\n")
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    logger.info("Memory LLM config updated")
+    return {"success": True, "message": "配置已更新"}
+
+
+@app.get("/api/config/llm")
+async def get_memory_llm_config():
+    """获取 Memory 系统的 LLM 配置（API Key 掩码）。"""
+    from Memory.config.settings import settings
+    key = settings.models.llm_api_key or ""
+    masked = ""
+    if key and len(key) > 8:
+        masked = key[:4] + "*" * (len(key) - 8) + key[-4:]
+    elif key:
+        masked = "*" * len(key)
+    return {
+        "api_key": masked,
+        "base_url": settings.models.llm_base_url or "",
+        "provider": settings.models.llm_provider or "qianwen",
+        "model": settings.models.llm_model or "",
+    }

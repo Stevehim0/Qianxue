@@ -25,6 +25,10 @@ class HeartbeatLoop:
 
     async def run(self):
         """启动心跳循环。"""
+        if not getattr(self.config, 'enabled', True):
+            logger.info("Heartbeat disabled in config, exiting")
+            return
+
         logger.info(
             f"Heartbeat started: interval={self.config.interval}s, "
             f"backend={self.config.backend_url}"

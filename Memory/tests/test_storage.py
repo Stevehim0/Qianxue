@@ -19,7 +19,6 @@ from Memory.storage.experience_edge_store import ExperienceEdgeStore, Experience
 from Memory.storage.entity_store import EntityStore, Entity
 from Memory.storage.entity_edge_store import EntityEdgeStore, EntityEdge
 from Memory.storage.cross_edge_store import CrossEdgeStore, CrossEdge
-from Memory.storage.core_store import CoreStore, Core
 from Memory.storage.state_store import StateStore, State
 from Memory.storage.profile_store import ProfileStore, PersonProfile
 
@@ -256,52 +255,6 @@ class TestCrossEdgeStore:
         edge_id = cross_store.create(edge)
 
         assert edge_id > 0
-
-
-@pytest.mark.skip(reason="core_store 已废弃，数据现通过 Backend HTTP API 获取")
-class TestCoreStore:
-    """测试CoreStore（单行表）— 已废弃。"""
-
-    def test_single_row_constraint(self, memory_db):
-        """测试单行表约束。"""
-        store = CoreStore(memory_db)
-
-        core = store.get()
-        assert core.id == 1
-
-        # 再次获取，应该是同一个id
-        core2 = store.get()
-        assert core2.id == 1
-
-    def test_update_stable_layer(self, memory_db):
-        """测试更新稳定层。"""
-        store = CoreStore(memory_db)
-
-        success = store.update_stable_layer("新的稳定层内容", reason="测试更新")
-        assert success is True
-
-        core = store.get()
-        assert core.stable_text == "新的稳定层内容"
-
-    def test_anchors_json(self, memory_db):
-        """测试anchors字段的JSON序列化。"""
-        store = CoreStore(memory_db)
-
-        # 清理可能存在的旧行和初始化标志，确保测试独立性
-        with memory_db.transaction() as cursor:
-            cursor.execute("DELETE FROM core WHERE id = ?", (store.SINGLE_ROW_ID,))
-        store._initialized = False  # 重置初始化标志
-
-        # 先get()创建默认行，然后update
-        store.get()
-        new_anchors = {
-            "bottom_lines": ["底线1", "底线2"],
-            "style_keywords": ["关键词1"],
-        }
-        store.update_anchors(new_anchors)
-
-        core = store.get()
-        assert core.anchors == new_anchors
 
 
 class TestStateStore:

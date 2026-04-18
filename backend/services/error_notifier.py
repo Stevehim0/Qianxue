@@ -9,42 +9,14 @@
 import asyncio
 import logging
 import time
-from pathlib import Path
 from typing import Optional
 
-import yaml
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
 # 冷却记录: key → (last_notify_time, repeat_count)
 _cooldown_map: dict[str, tuple[float, int]] = {}
-COOLDOWN_SECONDS = 60
-
-# 管理员QQ号缓存
-_admin_qq_id: Optional[str] = None
-
-
-def _load_admin_qq_id() -> Optional[str]:
-    """从 llm_config.yaml 加载管理员QQ号。"""
-    global _admin_qq_id
-    if _admin_qq_id is not None:
-        return _admin_qq_id if _admin_qq_id else None
-
-    try:
-        config_path = Path(__file__).parent.parent / "llm_config.yaml"
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        admin_cfg = config.get("admin", {}) if config else {}
-        _admin_qq_id = str(admin_cfg.get("qq_id", "") or "").strip()
-        if _admin_qq_id:
-            logger.info(f"错误通知: 管理员QQ号 {_admin_qq_id}")
-        else:
-            logger.info("错误通知: 未配置管理员QQ号，跳过通知")
-    except Exception as e:
-        logger.warning(f"加载管理员配置失败: {e}")
-        _admin_qq_id = ""
-
-    return _admin_qq_id if _admin_qq_id else None
 
 
 def _format_error_message(
@@ -75,7 +47,7 @@ async def notify_error(
         error: 错误详情，如 "ConnectionTimeout - API请求超时"
     """
     try:
-        admin_id = _load_admin_qq_id()
+        admin_id = settings.admin.qq_id
         if not admin_id:
             return
 
@@ -86,7 +58,7 @@ async def notify_error(
 
         if cooldown_key in _cooldown_map:
             last_time, count = _cooldown_map[cooldown_key]
-            if now - last_time < COOLDOWN_SECONDS:
+            if now - last_time < settings.admin.cooldown_seconds:
                 # 在冷却期内，只增加计数，不发送
                 _cooldown_map[cooldown_key] = (last_time, count + 1)
                 return

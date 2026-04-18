@@ -31,13 +31,16 @@ class ModelsConfig:
     """模型配置。"""
 
     embedding_model: str = "BAAI/bge-base-zh"  # Embedding 模型名称
-    llm_provider: str = "qianwen"  # LLM 提供商（千问/DeepSeek）
+    llm_provider: str = "qianwen"  # LLM 提供商（qianwen/deepseek/openai_compatible）
     llm_api_key: Optional[str] = field(
         default_factory=lambda: os.getenv("LLM_API_KEY")
     )  # LLM API 密钥
     llm_base_url: Optional[str] = field(
         default_factory=lambda: os.getenv("LLM_BASE_URL")
     )  # LLM API 基础 URL
+    llm_model: Optional[str] = field(
+        default_factory=lambda: os.getenv("LLM_MODEL")
+    )  # LLM 模型名称（openai_compatible 时使用）
     allow_mock_models: bool = field(
         default_factory=lambda: os.getenv("ALLOW_MOCK_MODELS", "false").lower() == "true"
     )  # 是否允许使用Mock模型（仅用于测试，默认false）
@@ -306,6 +309,7 @@ class Settings:
                 "llm_provider": self.models.llm_provider,
                 "llm_api_key": "***" if self.models.llm_api_key else None,
                 "llm_base_url": self.models.llm_base_url,
+                "llm_model": self.models.llm_model,
             },
             "decay": {
                 "lambda_L0": self.decay.lambda_L0,

@@ -1,12 +1,13 @@
 """LLM客户端服务模块。
 
-提供统一的LLM调用接口，支持千问和DeepSeek两个提供商。
+提供统一的LLM调用接口，支持千问、DeepSeek和通用OpenAI兼容提供商。
 
 主要组件:
 - BaseLLMClient: LLM客户端抽象基类
 - LLMFactory: 工厂类，用于创建不同提供商的客户端
 - QianwenClient: 千问API客户端实现
 - DeepSeekClient: DeepSeek API客户端实现
+- OpenAICompatibleClient: 通用OpenAI兼容客户端（适配所有OpenAI格式API）
 - parse_json: JSON解析工具函数（处理markdown包裹）
 - with_retry: 指数退避重试装饰器
 - setup_error_logger: 错误日志记录器配置
@@ -22,6 +23,10 @@
     >>> # 创建DeepSeek客户端
     >>> client = LLMFactory.create_client(provider="deepseek")
     >>> response = client.call("Hello")
+    >>>
+    >>> # 创建通用OpenAI兼容客户端
+    >>> client = LLMFactory.create_client(provider="openai_compatible",
+    ...     base_url="https://api.openai.com/v1", model="gpt-4o")
 """
 
 # 基类和工厂
@@ -31,6 +36,7 @@ from Memory.llm.factory import LLMFactory
 # 具体客户端实现
 from Memory.llm.qianwen_client import QianwenClient
 from Memory.llm.deepseek_client import DeepSeekClient
+from Memory.llm.openai_compatible_client import OpenAICompatibleClient
 
 # 工具函数
 from Memory.llm.utils import parse_json, with_retry, setup_error_logger, log_llm_error
@@ -42,6 +48,7 @@ __all__ = [
     # 具体客户端
     "QianwenClient",
     "DeepSeekClient",
+    "OpenAICompatibleClient",
     # 工具函数
     "parse_json",
     "with_retry",

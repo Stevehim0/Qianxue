@@ -4,16 +4,14 @@
 记录事件和获取跨会话感知文本。
 """
 
-import os
 import logging
 from typing import Optional
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from backend.config import settings
 
-# 与 Memory 服务共用 URL
-STM_SERVICE_URL = os.getenv("MEMORY_SERVICE_URL", "http://localhost:8001")
+logger = logging.getLogger(__name__)
 
 
 class STMClient:
@@ -23,15 +21,20 @@ class STMClient:
     所有方法都有降级处理，不会因 Memory 服务不可用而阻塞主流程。
     """
 
-    def __init__(self, base_url: str = STM_SERVICE_URL):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str = ""):
+        self.base_url = (base_url or settings.memory.service_url).rstrip("/")
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
-                timeout=httpx.Timeout(connect=3.0, read=10.0, write=5.0, pool=5.0),
+                timeout=httpx.Timeout(
+                    connect=settings.memory.stm_connect_timeout,
+                    read=settings.memory.stm_read_timeout,
+                    write=settings.memory.stm_write_timeout,
+                    pool=settings.memory.stm_pool_timeout,
+                ),
             )
         return self._client
 

@@ -34,18 +34,13 @@ class QianwenClient(BaseLLMClient):
             api_key: 千问API密钥（可选，从settings.models.llm_api_key读取）
             **kwargs: 其他配置参数（传递给父类）
         """
-        # 从settings读取默认api_key
         if api_key is None:
             api_key = settings.models.llm_api_key
 
         if not api_key:
-            raise ValueError(
-                "Qianwen API key is required. "
-                "Please set LLM_API_KEY environment variable or "
-                "configure it in settings.models.llm_api_key"
-            )
+            logger.warning("LLM_API_KEY 未配置，LLM 调用将失败，请通过前端或 .env 配置")
 
-        super().__init__(api_key=api_key, **kwargs)
+        super().__init__(api_key=api_key or "", **kwargs)
         self.provider = "qianwen"
 
     def call(

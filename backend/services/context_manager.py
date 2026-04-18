@@ -9,7 +9,8 @@ from backend.database.models import (
     ConversationMessage, Group, UserProfile, GlobalContext,
     MentionInfo, GroupMessage
 )
-from backend.config import config_manager
+from backend.db_config import config_manager
+from backend.config.loader import settings
 from backend.services.memory_interface import memory_provider
 
 
@@ -174,7 +175,7 @@ class ContextManager:
 
         return messages
 
-    async def get_group_context(self, group_id: str, limit: int = 50) -> List[ConversationMessage]:
+    async def get_group_context(self, group_id: str, limit: int = settings.context.group_context_limit) -> List[ConversationMessage]:
         """获取群聊的所有对话上下文（用于查看）"""
         conn = await get_db()
 
@@ -285,7 +286,7 @@ class ContextManager:
                     query=recent_content,
                     user_id=user_id,
                     group_id=group_id,
-                    limit=5,
+                    limit=settings.context.memory_recall_limit,
                     context=recall_context,
                 )
 
@@ -482,8 +483,8 @@ class ContextManager:
     async def get_group_context(
         self,
         group_id: str,
-        limit: int = 50,
-        time_window_minutes: int = 30
+        limit: int = settings.context.group_context_limit,
+        time_window_minutes: int = settings.context.group_context_time_window
     ) -> List[GroupMessage]:
         """
         获取群聊的完整对话上下文（所有用户的发言）

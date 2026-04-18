@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.database.db import get_db
 from backend.api.llm import OpenAIProvider, AnthropicProvider, DeepSeekProvider, QwenProvider, llm_manager
-from backend.config import config_manager
+from backend.db_config import config_manager
 from backend.database.models import (
     ApiResponse, ApiConfigRequest, GroupConfigRequest, SystemPromptConfig, SystemPromptRequest
 )
@@ -333,6 +333,7 @@ def create_provider(name: str, api_key: str, base_url: str, model: str):
     """根据配置创建对应的provider"""
     # 根据base_url或名称判断provider类型
     name_lower = name.lower()
+    url_lower = base_url.lower()
 
     if "openai" in name_lower or "gpt" in name_lower:
         return OpenAIProvider(api_key, base_url, model)
@@ -340,27 +341,37 @@ def create_provider(name: str, api_key: str, base_url: str, model: str):
         return AnthropicProvider(api_key, base_url, model)
     elif "deepseek" in name_lower:
         return DeepSeekProvider(api_key, base_url, model)
-    elif "qwen" in name_lower or "aliyun" in name_lower:
+    elif "qwen" in name_lower or "aliyun" in name_lower or "dashscope" in url_lower:
         return QwenProvider(api_key, base_url, model)
+    elif any(k in name_lower for k in ("zhipu", "chatglm", "glm")):
+        return OpenAIProvider(api_key, base_url, model)
+    elif any(k in name_lower for k in ("moonshot", "kimi")):
+        return OpenAIProvider(api_key, base_url, model)
+    elif "minimax" in name_lower:
+        return OpenAIProvider(api_key, base_url, model)
+    elif any(k in name_lower for k in ("doubao", "volcengine", "火山")):
+        return OpenAIProvider(api_key, base_url, model)
+    elif any(k in name_lower for k in ("siliconflow", "silicon")):
+        return OpenAIProvider(api_key, base_url, model)
     else:
         # 默认使用OpenAI兼容格式
         return OpenAIProvider(api_key, base_url, model)
 
 
 # ================================================================
-# 双模型管理 API（thinking_provider + speaking_provider）
+# 模型管理 API
 # ================================================================
 
 class ProviderConfigRequest(BaseModel):
     """模型提供者配置请求"""
-    api_key: str
-    base_url: str
-    model: str
+    api_key: str = ""
+    base_url: str = ""
+    model: str = ""
 
 
 @router.get("/model-config")
 async def get_model_config():
-    """获取当前思考/说话模型配置"""
+    """获取当前模型配置"""
     return llm_manager.get_model_config()
 
 
@@ -368,33 +379,31 @@ async def get_model_config():
 async def update_thinking_provider(request: ProviderConfigRequest):
     """更新思考模型配置"""
     try:
-        provider = create_provider("thinking", request.api_key, request.base_url, request.model)
+        api_key = request.api_key
+        # 如果没传 api_key，保留当前已有的
+        if not api_key:
+            current = llm_manager.get_thinking_provider()
+            if current:
+                api_key = current.api_key
+
+        if not api_key:
+            raise HTTPException(status_code=400, detail="请提供 API Key")
+
+        provider = create_provider("thinking", api_key, request.base_url, request.model)
         if not provider:
             raise HTTPException(status_code=400, detail="无法创建思考模型提供者")
         llm_manager.set_thinking_provider_direct(provider)
+
+        # 持久化到 llm.yaml
+        from backend.config.loader import save_thinking_provider
+        save_thinking_provider(api_key, request.base_url, request.model)
+
         logger.info(f"思考模型已更新: {request.base_url} / {request.model}")
         return ApiResponse(success=True, message="思考模型配置更新成功")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"更新思考模型配置失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.put("/speaking-provider")
-async def update_speaking_provider(request: ProviderConfigRequest):
-    """更新说话模型配置"""
-    try:
-        provider = create_provider("speaking", request.api_key, request.base_url, request.model)
-        if not provider:
-            raise HTTPException(status_code=400, detail="无法创建说话模型提供者")
-        llm_manager.set_speaking_provider_direct(provider)
-        logger.info(f"说话模型已更新: {request.base_url} / {request.model}")
-        return ApiResponse(success=True, message="说话模型配置更新成功")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"更新说话模型配置失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -416,19 +425,54 @@ async def test_thinking_provider(request: ProviderConfigRequest):
         return ApiResponse(success=False, message=f"测试失败: {str(e)}")
 
 
-@router.post("/speaking-provider/test")
-async def test_speaking_provider(request: ProviderConfigRequest):
-    """测试说话模型连接"""
-    try:
-        provider = create_provider("speaking", request.api_key, request.base_url, request.model)
-        if not provider:
-            return ApiResponse(success=False, message="无法创建说话模型提供者")
-        is_connected = await provider.test_connection()
-        await provider.close()
-        if is_connected:
-            return ApiResponse(success=True, message="说话模型连接测试成功")
-        else:
-            return ApiResponse(success=False, message="说话模型连接测试失败，请检查配置")
-    except Exception as e:
-        logger.error(f"测试说话模型连接失败: {e}")
-        return ApiResponse(success=False, message=f"测试失败: {str(e)}")
+# ================================================================
+# 通用 Settings 管理 API
+# ================================================================
+
+# 敏感字段（API key 等）在 GET 时掩码处理
+_SENSITIVE_KEYS = {"api_key"}
+# 需重启才能生效的 section
+_RESTART_SECTIONS = {"server"}
+
+
+@router.get("/settings")
+async def get_all_settings():
+    """获取所有 settings section 的配置值。"""
+    from dataclasses import asdict
+    result = config_manager.get_all_settings()
+    # 掩码敏感字段
+    for section_data in result.values():
+        for key in _SENSITIVE_KEYS:
+            if key in section_data and section_data[key]:
+                val = str(section_data[key])
+                if len(val) > 8:
+                    section_data[key] = val[:4] + "*" * (len(val) - 8) + val[-4:]
+                else:
+                    section_data[key] = "*" * len(val)
+    return {"success": True, "data": result}
+
+
+@router.put("/settings/{section}")
+async def update_settings_section(section: str, request: Dict):
+    """更新指定 section 的配置。"""
+    if section not in config_manager.get_all_settings():
+        raise HTTPException(status_code=404, detail=f"未知的配置分组: {section}")
+
+    # 敏感字段：如果值含 * 则不更新（前端回传的掩码值）
+    cleaned = {}
+    for k, v in request.items():
+        if k in _SENSITIVE_KEYS and isinstance(v, str) and "*" in v:
+            continue
+        cleaned[k] = v
+
+    if not cleaned:
+        return ApiResponse(success=True, message="无变更")
+
+    ok = await config_manager.save_settings_section(section, cleaned)
+    if not ok:
+        raise HTTPException(status_code=500, detail="保存失败")
+
+    needs_restart = section in _RESTART_SECTIONS
+    msg = "配置已保存并生效" if not needs_restart else "配置已保存，需重启服务生效"
+    logger.info(f"Settings/{section} 已更新: {list(cleaned.keys())}")
+    return ApiResponse(success=True, message=msg)

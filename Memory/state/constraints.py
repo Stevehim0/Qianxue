@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from Memory.state import StateConstraints
 
 if TYPE_CHECKING:
-    from Memory.core import Identity
+    pass
 
 logger = logging.getLogger(__name__)
 

@@ -4,20 +4,18 @@ import os
 import logging
 import json
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Optional
 import queue
 import asyncio
 from datetime import datetime
-
-import yaml
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import StreamingResponse
 
 from backend.database.db import database
 from backend.database.db import get_db
-from backend.config import config_manager
+from backend.db_config import config_manager
+from backend.config import settings
 from backend.services.memory_interface import QianxueMemoryProvider
 import backend.services.memory_interface as mem_mod
 from backend.api.napcat import napcat_client
@@ -115,60 +113,30 @@ async def lifespan(app: FastAPI):
     await _ensure_robot_user()
     logger.info("机器人用户初始化完成")
 
-    # 加载 YAML 配置
-    config_path = Path(__file__).parent / "llm_config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        app_config = yaml.safe_load(f)
-
-    # 初始化 LLM providers
+    # 初始化 LLM providers（使用统一配置）
     from backend.routes.config_routes import create_provider
 
-    # 优先加载双模型配置（thinking_provider + speaking_provider）
-    thinking_cfg = app_config.get("thinking_provider")
-    speaking_cfg = app_config.get("speaking_provider")
+    thinking_cfg = settings.llm.thinking_provider
 
-    if thinking_cfg:
-        provider = create_provider("thinking", thinking_cfg["api_key"], thinking_cfg["base_url"], thinking_cfg["model"])
+    if thinking_cfg.api_key:
+        provider = create_provider("thinking", thinking_cfg.api_key, thinking_cfg.base_url, thinking_cfg.model)
         if provider:
             llm_manager.set_thinking_provider_direct(provider)
-            logger.info(f"思考模型已加载: {thinking_cfg['base_url']} / {thinking_cfg['model']}")
+            logger.info(f"思考模型已加载: {thinking_cfg.base_url} / {thinking_cfg.model}")
 
-    if speaking_cfg:
-        provider = create_provider("speaking", speaking_cfg["api_key"], speaking_cfg["base_url"], speaking_cfg["model"])
-        if provider:
-            llm_manager.set_speaking_provider_direct(provider)
-            logger.info(f"说话模型已加载: {speaking_cfg['base_url']} / {speaking_cfg['model']}")
-
-    # 向后兼容：如果没有双模型配置，尝试旧的单模型配置
-    if not thinking_cfg and not speaking_cfg:
-        providers_cfg = app_config.get("providers", {})
-        active_name = app_config.get("active_provider", "")
-        for name, cfg in providers_cfg.items():
-            provider = create_provider(name, cfg["api_key"], cfg["base_url"], cfg["model"])
-            if provider:
-                llm_manager.add_provider(name, provider)
-        if active_name and active_name in llm_manager._providers:
-            llm_manager.set_current_provider(active_name)
-            logger.info(f"LLM 当前使用（兼容模式）: {active_name}")
-        else:
-            logger.warning("未设置有效的 LLM 提供者，调用将失败")
-
-    # 如果只配了 thinking 没配 speaking，speaking 回退到 thinking
-    if thinking_cfg and not speaking_cfg:
-        logger.info("说话模型未配置，将回退到思考模型")
+    if not thinking_cfg.api_key:
+        logger.warning("未设置 LLM API Key，请在 Web 界面配置")
 
     # 初始化NapCat客户端
-    napcat_cfg = app_config.get("napcat", {})
-    napcat_client.http_url = napcat_cfg.get("http_url", "http://localhost:3000")
+    napcat_client.http_url = settings.napcat.http_url
     logger.info(f"NapCat HTTP地址: {napcat_client.http_url}")
 
     # 初始化AgentBrain
     global qq_source, tool_registry, agent_brain
-    brain_cfg = app_config.get("brain", {})
     qq_source = QQSource()
     tool_registry = ToolRegistry()
     agent_brain = AgentBrain(tool_registry)
-    agent_brain.max_iterations = brain_cfg.get("max_iterations", 3)
+    agent_brain.max_iterations = settings.brain.max_iterations
 
     # 注册工具
     tool_registry.register(SendMessageTool())
@@ -184,8 +152,7 @@ async def lifespan(app: FastAPI):
     logger.info("核心层人设加载完成")
 
     # 初始化记忆系统
-    memory_cfg = app_config.get("memory", {})
-    memory_url = memory_cfg.get("service_url", "http://localhost:8001")
+    memory_url = settings.memory.service_url
     qianxue_provider = QianxueMemoryProvider(base_url=memory_url)
     if await qianxue_provider.health_check():
         mem_mod.memory_provider = qianxue_provider
@@ -297,7 +264,7 @@ async def log_stream(request: Request):
                 try:
                     log_data = await asyncio.wait_for(
                         asyncio.to_thread(log_queue.get),
-                        timeout=1.0
+                        timeout=settings.server.sse_heartbeat_timeout
                     )
                     yield f"data: {log_data}\n\n"
                 except asyncio.TimeoutError:
@@ -422,7 +389,7 @@ def _combine_messages(messages: list):
 
 # 已检查过档案的用户（避免重复调 API）
 _profile_checked_users: set[str] = set()
-_PROFILE_TURN_THRESHOLD = 10
+_PROFILE_TURN_THRESHOLD = settings.memory.profile_turn_threshold
 
 
 async def _check_profile_for_batch(batch: list):
@@ -459,9 +426,9 @@ async def _ensure_profile(nickname: str, user_id: str):
     """调 Memory API 确保档案存在。"""
     try:
         import httpx
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=settings.memory.profile_ensure_timeout) as client:
             resp = await client.post(
-                "http://localhost:8001/api/profile/ensure",
+                settings.memory.profile_ensure_url,
                 json={"entity_name": nickname},
             )
             if resp.status_code == 200:
@@ -504,7 +471,7 @@ async def _process_group_message(message_data: dict):
             return
 
         # 4. 入 debounce 队列（等对方说完再回复）
-        if agent_message.priority >= 10:  # @消息
+        if agent_message.priority >= settings.brain.mention_priority:  # @消息
             logger.info(f"@消息: {agent_message.content[:50]}...")
             _record_stm_event(
                 event_type="user_mention",
@@ -512,18 +479,18 @@ async def _process_group_message(message_data: dict):
                 group_id=agent_message.group_id,
                 user_id=agent_message.user_id,
                 summary=f"{agent_message.sender_nickname} @你: {agent_message.content[:50]}",
-                importance=0.7,
+                importance=settings.brain.stm_importance_user_mention,
             )
         else:
             logger.info(f"普通消息: {agent_message.content[:50]}...")
-            if len(agent_message.content) > 20 or '？' in agent_message.content or '?' in agent_message.content:
+            if len(agent_message.content) > settings.brain.significant_length or '？' in agent_message.content or '?' in agent_message.content:
                 _record_stm_event(
                     event_type="significant_msg",
                     source_type="qq_group",
                     group_id=agent_message.group_id,
                     user_id=agent_message.user_id,
                     summary=f"{agent_message.sender_nickname} 说: {agent_message.content[:60]}",
-                    importance=0.4,
+                    importance=settings.brain.stm_importance_significant_msg,
                 )
         await _enqueue_message(agent_message.group_id, agent_message)
 
@@ -611,7 +578,7 @@ async def _process_private_message(message_data: dict):
             group_id=agent_message.group_id,
             user_id=agent_message.user_id,
             summary=f"私聊: {agent_message.sender_nickname} 说: {agent_message.content[:50]}",
-            importance=0.8,
+            importance=settings.brain.stm_importance_private_chat,
         )
         await _enqueue_message(agent_message.group_id, agent_message)
 
@@ -658,8 +625,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=settings.server.host,
+        port=settings.server.port,
+        reload=settings.server.reload,
+        log_level=settings.server.log_level
     )

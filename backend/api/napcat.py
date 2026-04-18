@@ -4,6 +4,7 @@ import httpx
 import logging
 import asyncio
 from typing import Optional, Callable, Dict, List
+from backend.config import settings
 from backend.database.models import NapCatMessage, MessageSegment
 
 
@@ -16,7 +17,7 @@ class NapCatClient:
 
     def __init__(self, http_url: Optional[str] = None):
         self.http_url = http_url  # NapCat HTTP API地址，如 http://localhost:3000
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(timeout=settings.napcat.timeout)
         self._message_callback: Optional[Callable] = None
         self._connected = False
         self.self_id: Optional[int] = None

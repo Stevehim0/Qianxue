@@ -58,7 +58,7 @@ class PerceptionBuilder:
     def _extract_time(self, iso_str: str) -> str:
         """从 ISO 时间戳生成带相对时间标注的显示字符串。"""
         try:
-            from Memory.core.time_utils import format_relative_time_for_display
+            from Memory.utils.time_utils import format_relative_time_for_display
             return format_relative_time_for_display(iso_str)
         except Exception:
             # 回退到简单 HH:MM

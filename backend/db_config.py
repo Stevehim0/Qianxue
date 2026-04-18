@@ -2,9 +2,11 @@
 
 import json
 import logging
+from dataclasses import asdict, fields
 from typing import Optional, Dict
 from backend.database.db import get_db
 from backend.database.models import ApiConfig, SystemPromptConfig
+from backend.config.loader import settings
 
 
 # 配置日志
@@ -21,13 +23,17 @@ class ConfigManager:
         context_window      - 上下文窗口大小（发给 LLM 的最近对话轮数，默认 10）
         debounce_seconds    - 消息合并等待秒数（收到消息后等多久确认对方说完了，默认 6）
         vision              - 图片识别配置（模型、API Key 等）
+        settings_sections   - 各 YAML section 的 DB 覆盖值（brain, sleep, memory 等）
     """
 
     def __init__(self):
         self._api_config: Optional[ApiConfig] = None
         self._system_prompt_config: Optional[SystemPromptConfig] = None
-        self._context_window: int = 10  # 上下文窗口大小（最近对话轮数）
-        self._debounce_seconds: int = 10  # 消息合并等待秒数
+        self._context_window: int = settings.context.group_context_limit
+        self._debounce_seconds: int = 10
+        self._vision_config: Optional[Dict] = None
+        # 通用 section 覆盖值: section_name -> dict
+        self._section_overrides: Dict[str, Dict] = {}
 
     async def load_configs(self):
         """从数据库加载配置"""
@@ -87,7 +93,35 @@ class ConfigManager:
                 self._debounce_seconds = int(row[0])
             except Exception as e:
                 logger.error(f"加载debounce配置失败: {e}")
-                self._debounce_seconds = 6
+                self._debounce_seconds = 10
+
+        # 加载Vision配置（数据库覆盖YAML默认值）
+        cursor = await conn.execute(
+            "SELECT value FROM configs WHERE key = ?",
+            ("vision",)
+        )
+        row = await cursor.fetchone()
+        if row:
+            try:
+                self._vision_config = json.loads(row[0])
+            except Exception as e:
+                logger.error(f"加载Vision配置失败: {e}")
+
+        # 加载通用 settings section 覆盖值
+        for section in settings.section_names():
+            db_key = f"settings_{section}"
+            cursor = await conn.execute(
+                "SELECT value FROM configs WHERE key = ?", (db_key,)
+            )
+            row = await cursor.fetchone()
+            if row:
+                try:
+                    override = json.loads(row[0])
+                    if isinstance(override, dict):
+                        self._section_overrides[section] = override
+                        settings.update_section(section, override)
+                except Exception as e:
+                    logger.error(f"加载 settings/{section} 失败: {e}")
 
     async def save_api_config(self, config: ApiConfig):
         """保存API配置"""
@@ -168,16 +202,50 @@ class ConfigManager:
         await conn.commit()
 
     def get_vision_config(self) -> Dict[str, any]:
-        """获取Vision配置"""
-        return {
-            "enabled": True,
-            "provider": "qwen",
-            "model": "qwen-vl-max",
-            "api_key": "",
-            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "max_retries": 3,
-            "timeout": 30
+        """获取Vision配置（数据库覆盖 > YAML 默认值）"""
+        base = {
+            "enabled": settings.vision.enabled,
+            "provider": settings.vision.provider,
+            "model": settings.vision.model,
+            "api_key": settings.vision.api_key,
+            "base_url": settings.vision.base_url,
+            "max_retries": settings.vision.max_retries,
+            "timeout": settings.vision.timeout,
         }
+        if self._vision_config:
+            base.update(self._vision_config)
+        return base
+
+    def get_all_settings(self) -> Dict[str, Dict]:
+        """返回所有 settings section 的当前值（含 DB 覆盖）。"""
+        result = {}
+        for section in settings.section_names():
+            dc = getattr(settings, section)
+            result[section] = asdict(dc)
+        return result
+
+    async def save_settings_section(self, section: str, data: Dict) -> bool:
+        """保存指定 section 的配置到 DB 并热更新内存。"""
+        if section not in settings.section_names():
+            return False
+
+        # 热更新内存
+        settings.update_section(section, data)
+
+        # 合并已有覆盖值
+        existing = self._section_overrides.get(section, {})
+        existing.update(data)
+        self._section_overrides[section] = existing
+
+        # 写入 DB
+        conn = await get_db()
+        db_key = f"settings_{section}"
+        await conn.execute(
+            "INSERT OR REPLACE INTO configs (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+            (db_key, json.dumps(existing)),
+        )
+        await conn.commit()
+        return True
 
 
 # 全局配置管理器实例

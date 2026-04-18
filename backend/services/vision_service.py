@@ -6,7 +6,8 @@ import httpx
 import base64
 from typing import Optional, List
 
-from backend.config import config_manager
+from backend.db_config import config_manager
+from backend.config.loader import settings
 
 
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +20,7 @@ class VisionService:
     def __init__(self):
         """初始化Vision服务"""
         self.config = config_manager.get_vision_config()
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(timeout=settings.vision.timeout)
 
     def reload_config(self):
         """重新加载配置"""
@@ -40,7 +41,7 @@ class VisionService:
             logger.info(f"正在下载图片: {image_url[:50]}...")
 
             # 下载图片
-            response = await self.client.get(image_url, timeout=15.0)
+            response = await self.client.get(image_url, timeout=settings.vision.image_download_timeout)
             if response.status_code != 200:
                 logger.warning(f"下载图片失败: status={response.status_code}")
                 return None

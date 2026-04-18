@@ -9,7 +9,6 @@ from Memory.state import MoodState, EnergyState, StateManager, StateUpdater, Sta
 from Memory.state.manager import DefaultStateManager
 from Memory.state.updater import DefaultStateUpdater
 from Memory.state.constraints import DefaultStateConstraints
-from Memory.core import load_identity
 from Memory.tests.conftest import mock_emotion_snapshot
 
 # ========== 数据类测试 ==========
@@ -190,7 +189,7 @@ def test_default_state_updater_reset_timer():
 def test_default_state_constraints_check_mood_bounds():
     """测试情绪约束检查（占位实现）。"""
     constraints = DefaultStateConstraints()
-    identity = load_identity()
+    identity = None  # core层已移除，constraints为占位实现
 
     # Phase 4: 占位实现，返回原值
     valence, arousal = constraints.check_mood_bounds(0.8, 0.9, identity)
@@ -202,7 +201,7 @@ def test_default_state_constraints_check_mood_bounds():
 def test_default_state_constraints_check_energy_bounds():
     """测试精力约束检查（占位实现）。"""
     constraints = DefaultStateConstraints()
-    identity = load_identity()
+    identity = None  # core层已移除，constraints为占位实现
 
     # Phase 4: 占位实现，返回原值
     energy = constraints.check_energy_bounds(0.7, identity)
@@ -213,7 +212,7 @@ def test_default_state_constraints_check_energy_bounds():
 def test_default_state_constraints_check_confidence_bounds():
     """测试信心约束检查（占位实现）。"""
     constraints = DefaultStateConstraints()
-    identity = load_identity()
+    identity = None  # core层已移除，constraints为占位实现
 
     # Phase 4: 占位实现，返回原值
     confidence = constraints.check_confidence_bounds(0.6, identity)
@@ -224,7 +223,7 @@ def test_default_state_constraints_check_confidence_bounds():
 def test_default_state_constraints_derive_arousal_upper_bound():
     """测试推导arousal上限（占位实现）。"""
     constraints = DefaultStateConstraints()
-    identity = load_identity()
+    identity = None  # core层已移除，constraints为占位实现
 
     # Phase 4: 占位实现，返回1.0（无约束）
     upper_bound = constraints._derive_arousal_upper_bound(identity)
@@ -235,7 +234,7 @@ def test_default_state_constraints_derive_arousal_upper_bound():
 def test_default_state_constraints_derive_confidence_lower_bound():
     """测试推导confidence下限（占位实现）。"""
     constraints = DefaultStateConstraints()
-    identity = load_identity()
+    identity = None  # core层已移除，constraints为占位实现
 
     # Phase 4: 占位实现，返回0.0（无约束）
     lower_bound = constraints._derive_confidence_lower_bound(identity)
@@ -272,7 +271,7 @@ def test_state_layer_full_workflow(mock_emotion_snapshot):
 
     # 4. 创建StateConstraints并测试约束检查
     constraints = DefaultStateConstraints()
-    identity = load_identity()
+    identity = None  # core层已移除，constraints为占位实现
 
     val, arousal = constraints.check_mood_bounds(0.8, 0.9, identity)
     assert val == 0.8  # 占位实现，不做约束

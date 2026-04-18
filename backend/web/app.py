@@ -245,19 +245,43 @@ def proxy_thinking_provider():
     return _proxy_put(f"{BACKEND_URL}/api/thinking-provider", request.json)
 
 
-@app.route('/proxy/speaking-provider', methods=['PUT'])
-def proxy_speaking_provider():
-    return _proxy_put(f"{BACKEND_URL}/api/speaking-provider", request.json)
-
-
 @app.route('/proxy/thinking-provider/test', methods=['POST'])
 def proxy_thinking_provider_test():
     return _proxy_post(f"{BACKEND_URL}/api/thinking-provider/test", request.json)
 
 
-@app.route('/proxy/speaking-provider/test', methods=['POST'])
-def proxy_speaking_provider_test():
-    return _proxy_post(f"{BACKEND_URL}/api/speaking-provider/test", request.json)
+# ================================================================
+# 心跳服务配置（直接读写 heartbeat_config.yaml）
+# ================================================================
+
+@app.route('/proxy/heartbeat-config')
+def proxy_heartbeat_config():
+    import yaml
+    from pathlib import Path
+    cfg_path = Path(__file__).resolve().parent.parent.parent / "heartbeat_config.yaml"
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        data = {"enabled": False, "interval": 500, "backend_url": "http://localhost:8000"}
+    return jsonify(data)
+
+
+@app.route('/proxy/heartbeat-config', methods=['POST'])
+def proxy_heartbeat_config_update():
+    import yaml
+    from pathlib import Path
+    cfg_path = Path(__file__).resolve().parent.parent.parent / "heartbeat_config.yaml"
+    data = {}
+    if cfg_path.exists():
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    for key in ("enabled", "interval", "backend_url"):
+        if key in request.json:
+            data[key] = request.json[key]
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+    return jsonify({"success": True, "message": "心跳配置已保存（重启心跳服务生效）"})
 
 
 # ============================================================
@@ -272,6 +296,30 @@ def proxy_core_identity():
 @app.route('/proxy/core/malleable', methods=['POST'])
 def proxy_core_malleable():
     return _proxy_post(f"{BACKEND_URL}/api/core/malleable", request.json)
+
+
+# ============================================================
+# 通用 Settings 代理
+# ============================================================
+
+@app.route('/proxy/settings')
+def proxy_settings():
+    return _proxy_get(f"{BACKEND_URL}/api/settings")
+
+
+@app.route('/proxy/settings/<section>', methods=['PUT'])
+def proxy_settings_update(section):
+    return _proxy_put(f"{BACKEND_URL}/api/settings/{section}", request.json)
+
+
+@app.route('/proxy/memory-llm-config')
+def proxy_memory_llm_config():
+    return _proxy_get(f"{MEMORY_URL}/api/config/llm")
+
+
+@app.route('/proxy/memory-llm-config', methods=['POST'])
+def proxy_memory_llm_config_update():
+    return _proxy_post(f"{MEMORY_URL}/api/config/llm", request.json)
 
 
 # ============================================================
@@ -436,6 +484,20 @@ label { display:block; font-size:12px; color:var(--text-light); margin-bottom:4p
 /* Views */
 .view { display:none; }
 .view.active { display:block; }
+
+/* Settings sections */
+.settings-section { background:var(--card); border:1px solid var(--border); border-radius:8px; margin-bottom:16px; overflow:hidden; }
+.settings-header { padding:12px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; border-bottom:1px solid var(--border); }
+.settings-header:hover { background:var(--card-hover); }
+.settings-header h4 { margin:0; font-size:14px; }
+.settings-header .badge { font-size:11px; padding:2px 8px; border-radius:10px; margin-left:8px; }
+.settings-header .badge.restart { background:rgba(255,193,7,.15); color:var(--warning); }
+.settings-header .badge.live { background:rgba(40,167,69,.15); color:var(--success); }
+.settings-body { padding:16px; }
+.settings-body.collapsed { display:none; }
+.settings-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px 20px; }
+.settings-grid .form-group { margin-bottom:0; }
+.settings-actions { margin-top:16px; display:flex; justify-content:flex-end; gap:8px; }
 </style>
 </head>
 <body>
@@ -447,7 +509,7 @@ label { display:block; font-size:12px; color:var(--text-light); margin-bottom:4p
         <div class="nav-item active" onclick="switchView('dashboard')">仪表盘</div>
         <div class="nav-item" onclick="switchView('logs')">日志</div>
         <div class="nav-item" onclick="switchView('groups')">群聊</div>
-        <div class="nav-item" onclick="switchView('models')">模型</div>
+        <div class="nav-item" onclick="switchView('settings')">配置</div>
         <div class="nav-item" onclick="switchView('core')">核心</div>
     </div>
 </div>
@@ -495,9 +557,54 @@ label { display:block; font-size:12px; color:var(--text-light); margin-bottom:4p
             </div>
         </div>
 
-        <!-- Models -->
-        <div id="view-models" class="view">
-            <div class="model-grid" id="model-display"></div>
+        <!-- Settings -->
+        <div id="view-settings" class="view">
+            <div class="card" style="border-color:var(--warning);margin-bottom:16px;">
+                <div class="card-title" style="color:var(--warning);">思考模型配置（首次使用必填）</div>
+                <div class="settings-grid">
+                    <div class="form-group"><label>提供商预设</label>
+                        <select id="cfg-thinking-preset" onchange="applyThinkingPreset(this.value)">
+                            <option value="">-- 选择预设 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>API Key</label><input type="password" id="cfg-thinking-key" placeholder="sk-..."></div>
+                    <div class="form-group"><label>Base URL</label><input type="text" id="cfg-thinking-url" placeholder="https://api.openai.com/v1"></div>
+                    <div class="form-group"><label>模型</label><input type="text" id="cfg-thinking-model" placeholder="gpt-4o"></div>
+                </div>
+                <div class="settings-actions">
+                    <button class="btn btn-outline btn-sm" onclick="testThinkingProvider()">测试连接</button>
+                    <button class="btn btn-success" onclick="saveApiKeys()">保存并生效</button>
+                </div>
+            </div>
+            <div class="card" style="border-color:var(--info);margin-bottom:16px;">
+                <div class="card-title" style="color:var(--info);">记忆系统模型配置</div>
+                <div class="settings-grid">
+                    <div class="form-group"><label>提供商预设</label>
+                        <select id="cfg-memory-preset" onchange="applyMemoryPreset(this.value)">
+                            <option value="">-- 选择预设 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>API Key</label><input type="password" id="cfg-memory-key" placeholder="sk-..."></div>
+                    <div class="form-group"><label>Base URL</label><input type="text" id="cfg-memory-url" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"></div>
+                    <div class="form-group"><label>模型</label><input type="text" id="cfg-memory-model" placeholder="qwen-turbo"></div>
+                </div>
+                <div class="settings-actions">
+                    <button class="btn btn-success" onclick="saveApiKeys()">保存并生效</button>
+                </div>
+            </div>
+            <div class="card" style="border-color:var(--success);margin-bottom:16px;">
+                <div class="card-title" style="color:var(--success);">心跳服务</div>
+                <div class="settings-grid">
+                    <div class="form-group"><label>启用心跳</label>
+                        <label class="toggle"><input type="checkbox" id="cfg-hb-enabled"><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="form-group"><label>心跳间隔（秒）</label><input type="number" id="cfg-hb-interval" min="10" max="3600" value="500"></div>
+                    <div class="form-group"><label>后端地址</label><input type="text" id="cfg-hb-url" value="http://localhost:8000"></div>
+                </div>
+                <div class="settings-actions">
+                    <button class="btn btn-success" onclick="saveHeartbeatConfig()">保存</button>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-title">上下文窗口</div>
                 <div style="display:flex;align-items:center;gap:12px;">
@@ -506,13 +613,14 @@ label { display:block; font-size:12px; color:var(--text-light); margin-bottom:4p
                 </div>
             </div>
             <div class="card">
-                <div class="card-title">API 提供者</div>
+                <div class="card-title">API 提供者（备用列表）</div>
                 <div style="margin-bottom:12px;"><button class="btn btn-primary btn-sm" onclick="showApiForm()">+ 添加</button></div>
                 <table>
                     <thead><tr><th>名称</th><th>模型</th><th>Base URL</th><th>操作</th></tr></thead>
                     <tbody id="apis-tbody"></tbody>
                 </table>
             </div>
+            <div id="settings-container"></div>
         </div>
 
         <!-- Core -->
@@ -580,7 +688,7 @@ let currentContextGroupId = null;
 
 const TITLES = {
     dashboard:'仪表盘', logs:'日志', groups:'群聊',
-    models:'模型', core:'核心'
+    settings:'配置', core:'核心'
 };
 
 // ============================================================
@@ -637,7 +745,8 @@ function switchView(view) {
     if (view === 'dashboard') loadDashboard();
     if (view === 'logs') startLogStream();
     if (view === 'groups') loadGroups();
-    if (view === 'models') loadModels();
+    if (view === 'settings') { loadSettings(); loadApis(); }
+    if (view === 'core') loadCore();
     if (view === 'core') loadCore();
 }
 
@@ -698,9 +807,7 @@ async function loadDashboard() {
     if (!modelCfg.error) {
         let mh = '';
         const tp = modelCfg.thinking_provider;
-        const sp = modelCfg.speaking_provider;
-        mh += `<div class="model-card"><h4>思考模型</h4>${tp ? `<div class="info">Model: <span>${tp.model||'-'}</span></div><div class="info">URL: <span>${tp.base_url||'-'}</span></div><div class="info">Key: <span>${tp.api_key||'-'}</span></div>` : '<div class="info">未配置</div>'}</div>`;
-        mh += `<div class="model-card"><h4>说话模型</h4>${sp ? `<div class="info">Model: <span>${sp.model||'-'}</span></div><div class="info">URL: <span>${sp.base_url||'-'}</span></div><div class="info">Key: <span>${sp.api_key||'-'}</span></div>` : '<div class="info">未配置（回退到思考模型）</div>'}</div>`;
+        mh += `<div class="model-card"><h4>LLM 模型</h4>${tp ? `<div class="info">Model: <span>${tp.model||'-'}</span></div><div class="info">URL: <span>${tp.base_url||'-'}</span></div><div class="info">Key: <span>${tp.api_key||'-'}</span></div>` : '<div class="info">未配置</div>'}</div>`;
         document.getElementById('model-cards').innerHTML = mh;
     }
 
@@ -874,28 +981,13 @@ function escHtml(s) {
 }
 
 // ============================================================
-// 模型配置
+// API 提供者列表 & 上下文窗口
 // ============================================================
-async function loadModels() {
-    const [modelCfg, configs] = await Promise.all([
-        api('/proxy/model-config'),
-        api('/proxy/configs'),
-    ]);
-
-    // 双模型卡片
-    let mh = '';
-    const tp = modelCfg.thinking_provider;
-    const sp = modelCfg.speaking_provider;
-    mh += renderProviderCard('思考模型', 'thinking', tp);
-    mh += renderProviderCard('说话模型', 'speaking', sp);
-    document.getElementById('model-display').innerHTML = mh;
-
-    // 上下文窗口
+async function loadApis() {
+    const configs = await api('/proxy/configs');
     if (!configs.error) {
         document.getElementById('ctx-window').value = configs.context_window || 10;
     }
-
-    // API 列表
     if (!configs.error && configs.api_config) {
         const apis = configs.api_config.apis || {};
         const current = configs.api_config.current_api || '';
@@ -916,40 +1008,6 @@ async function loadModels() {
         }
         document.getElementById('apis-tbody').innerHTML = ah || '<tr><td colspan="4" style="color:var(--text-light)">暂无 API 配置</td></tr>';
     }
-}
-
-function renderProviderCard(title, type, info) {
-    if (!info) return `<div class="model-card"><h4>${title}</h4><div class="info">未配置</div><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="editProvider('${type}')">配置</button></div>`;
-    return `<div class="model-card">
-        <h4>${title}</h4>
-        <div class="info">Model: <span>${info.model||'-'}</span></div>
-        <div class="info">URL: <span>${info.base_url||'-'}</span></div>
-        <div class="info">Key: <span>${info.api_key||'-'}</span></div>
-        <div style="margin-top:8px;display:flex;gap:6px;">
-            <button class="btn btn-outline btn-sm" onclick="editProvider('${type}')">编辑</button>
-            <button class="btn btn-outline btn-sm" onclick="testProvider('${type}')">测试</button>
-        </div>
-    </div>`;
-}
-
-function editProvider(type) {
-    const title = type === 'thinking' ? '思考模型' : '说话模型';
-    document.getElementById('api-modal-title').textContent = '配置' + title;
-    document.getElementById('api-edit-name').value = '__provider__' + type;
-    document.getElementById('api-name').value = '';
-    document.getElementById('api-name').disabled = true;
-    document.getElementById('api-key').value = '';
-    document.getElementById('api-model').value = '';
-    document.getElementById('api-url').value = '';
-    openModal('api-modal');
-}
-
-async function testProvider(type) {
-    showToast('正在测试连接...');
-    const modal = document.getElementById('api-modal');
-    // 直接用空数据触发测试 - 用户需要先配置
-    // 简化：让用户在编辑弹窗里测试
-    editProvider(type);
 }
 
 function showApiForm() {
@@ -986,19 +1044,6 @@ async function saveApi() {
         return;
     }
 
-    // Provider 模式
-    if (editName && editName.startsWith('__provider__')) {
-        const type = editName.replace('__provider__', '');
-        const url = '/proxy/' + type + '-provider';
-        const res = await api(url, {method:'PUT', body:{api_key: apiKey, base_url: baseUrl, model}});
-        showToast(res.message || (res.error || '操作完成'), res.error ? 'error' : 'success');
-        if (!res.error) {
-            closeModal('api-modal');
-            loadModels();
-        }
-        return;
-    }
-
     const isEdit = editName && !editName.startsWith('__');
     const url = isEdit ? '/proxy/apis/' + editName : '/proxy/apis';
     const method = isEdit ? 'PUT' : 'POST';
@@ -1006,7 +1051,7 @@ async function saveApi() {
     showToast(res.message || (res.error || '操作完成'), res.error ? 'error' : 'success');
     if (!res.error) {
         closeModal('api-modal');
-        loadModels();
+        loadApis();
     }
 }
 
@@ -1014,13 +1059,13 @@ async function deleteApi(name) {
     if (!confirm('确认删除 API: ' + name + '？')) return;
     const res = await api('/proxy/apis/' + name, {method:'DELETE'});
     showToast(res.message || (res.error || '操作完成'), res.error ? 'error' : 'success');
-    loadModels();
+    loadApis();
 }
 
 async function switchApi(name) {
     const res = await api('/proxy/apis/switch/' + name, {method:'POST'});
     showToast(res.message || (res.error || '操作完成'), res.error ? 'error' : 'success');
-    loadModels();
+    loadApis();
 }
 
 async function testApi(name) {
@@ -1056,6 +1101,337 @@ async function saveMalleable() {
     if (!confirm('确认保存可塑层？这将修改 AI 的核心人设。')) return;
     const yaml = document.getElementById('core-malleable').value;
     const res = await api('/proxy/core/malleable', {method:'POST', body:{malleable_yaml: yaml, reason:'Web 前端编辑'}});
+    showToast(res.message || (res.error || '操作完成'), res.error ? 'error' : 'success');
+}
+
+// ============================================================
+// 通用配置
+// ============================================================
+const SETTINGS_META = {
+    brain: {
+        label: '大脑', icon: '\u{1F9E0}',
+        fields: {
+            max_iterations: {label:'最大迭代轮次', type:'int', min:1, max:20},
+            context_limit: {label:'上下文条数', type:'int', min:1, max:100},
+            context_time_window: {label:'上下文时间窗口(分)', type:'int', min:1},
+            gap_threshold: {label:'对话间隔阈值(秒)', type:'int', min:0},
+            interim_max_length: {label:'中间消息最大长度', type:'int', min:1, max:200},
+            state_api_timeout: {label:'状态API超时(秒)', type:'float', min:0.1},
+            proactive_context_limit: {label:'主动发言上下文数', type:'int', min:1},
+            proactive_context_time_window: {label:'主动发言时间窗口(分)', type:'float', min:0.1},
+            proactive_speak_cooldown: {label:'主动发言冷却(秒)', type:'int', min:0},
+            proactive_speak_max_per_hour: {label:'每小时主动发言上限', type:'int', min:0},
+            mention_priority: {label:'@消息优先级', type:'int', min:1},
+            significant_length: {label:'重要消息长度阈值', type:'int', min:1},
+            stm_importance_user_mention: {label:'@消息记忆权重(0-1)', type:'float', min:0, max:1, step:0.1},
+            stm_importance_significant_msg: {label:'长消息/提问记忆权重(0-1)', type:'float', min:0, max:1, step:0.1},
+            stm_importance_private_chat: {label:'私聊记忆权重(0-1)', type:'float', min:0, max:1, step:0.1},
+        }
+    },
+    sleep: {
+        label: '睡眠', icon: '\u{1F634}',
+        fields: {
+            enabled: {label:'启用睡眠', type:'bool'},
+            wind_down_hour: {label:'困倦时段(时)', type:'int', min:0, max:23},
+            sleep_hour: {label:'睡眠时间(时)', type:'int', min:0, max:23},
+            wake_hour: {label:'起床时间(时)', type:'int', min:0, max:23},
+            awake_energy_value: {label:'清醒精力值', type:'float', min:0, max:1, step:0.1},
+            awake_energy_label: {label:'清醒精力标签', type:'str'},
+            tired_energy_value: {label:'困倦精力值', type:'float', min:0, max:1, step:0.1},
+            tired_energy_label: {label:'困倦精力标签', type:'str'},
+            check_interval: {label:'检查间隔(秒)', type:'int', min:10},
+        }
+    },
+    memory: {
+        label: '记忆', icon: '\u{1F4BE}',
+        fields: {
+            service_url: {label:'记忆服务地址', type:'str'},
+            provider_connect_timeout: {label:'连接超时(秒)', type:'float', min:0.1},
+            provider_read_timeout: {label:'读取超时(秒)', type:'float', min:0.1},
+            provider_write_timeout: {label:'写入超时(秒)', type:'float', min:0.1},
+            provider_pool_timeout: {label:'连接池超时(秒)', type:'float', min:0.1},
+            stm_connect_timeout: {label:'STM连接超时(秒)', type:'float', min:0.1},
+            stm_read_timeout: {label:'STM读取超时(秒)', type:'float', min:0.1},
+            stm_write_timeout: {label:'STM写入超时(秒)', type:'float', min:0.1},
+            stm_pool_timeout: {label:'STM池超时(秒)', type:'float', min:0.1},
+            profile_ensure_timeout: {label:'档案超时(秒)', type:'float', min:0.1},
+            profile_turn_threshold: {label:'档案对话轮次阈值', type:'int', min:1},
+        }
+    },
+    napcat: {
+        label: 'NapCat (QQ)', icon: '\u{1F4AC}',
+        fields: {
+            http_url: {label:'NapCat HTTP 地址', type:'str'},
+            timeout: {label:'请求超时(秒)', type:'float', min:1},
+        }
+    },
+    admin: {
+        label: '管理员', icon: '\u{1F464}',
+        fields: {
+            qq_id: {label:'管理员 QQ 号', type:'str'},
+            cooldown_seconds: {label:'通知冷却(秒)', type:'int', min:0},
+        }
+    },
+    vision: {
+        label: '视觉', icon: '\u{1F441}',
+        fields: {
+            enabled: {label:'启用视觉', type:'bool'},
+            provider: {label:'服务商', type:'str'},
+            model: {label:'模型', type:'str'},
+            api_key: {label:'API Key', type:'password'},
+            base_url: {label:'Base URL', type:'str'},
+            max_retries: {label:'最大重试', type:'int', min:0},
+            timeout: {label:'超时(秒)', type:'int', min:1},
+            image_download_timeout: {label:'图片下载超时(秒)', type:'float', min:1},
+        }
+    },
+    context: {
+        label: '上下文', icon: '\u{1F4D1}',
+        fields: {
+            group_context_limit: {label:'群上下文条数', type:'int', min:1, max:200},
+            group_context_time_window: {label:'群上下文时间窗口(分)', type:'int', min:1},
+            memory_recall_limit: {label:'记忆召回条数', type:'int', min:1, max:20},
+        }
+    },
+    llm: {
+        label: 'LLM', icon: '\u{1F916}',
+        fields: {
+            anthropic_max_tokens: {label:'Anthropic 最大 token', type:'int', min:1},
+            api_timeout: {label:'API 超时(秒)', type:'float', min:1},
+        }
+    },
+    server: {
+        label: '服务', icon: '\u{1F5A5}', restart: true,
+        fields: {
+            host: {label:'监听地址', type:'str'},
+            port: {label:'端口', type:'int', min:1, max:65535},
+            log_level: {label:'日志级别', type:'select', options:['debug','info','warning','error']},
+            reload: {label:'热重载', type:'bool'},
+            sse_heartbeat_timeout: {label:'SSE 心跳超时(秒)', type:'float', min:0.1},
+        }
+    },
+};
+
+// LLM 提供商预设
+const PROVIDER_PRESETS = {
+    openai:       { name: 'OpenAI',       base_url: 'https://api.openai.com/v1',                               model: 'gpt-4o' },
+    deepseek:     { name: 'DeepSeek',     base_url: 'https://api.deepseek.com',                                 model: 'deepseek-chat' },
+    anthropic:    { name: 'Anthropic',    base_url: 'https://api.anthropic.com',                                model: 'claude-sonnet-4-20250514' },
+    qwen:         { name: '通义千问',      base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',       model: 'qwen-turbo' },
+    zhipu:        { name: '智谱 ChatGLM',  base_url: 'https://open.bigmodel.cn/api/paas/v4',                    model: 'glm-4-flash' },
+    moonshot:     { name: 'Moonshot',     base_url: 'https://api.moonshot.cn/v1',                               model: 'moonshot-v1-8k' },
+    minimax:      { name: 'MiniMax',      base_url: 'https://api.minimax.chat/v1',                              model: 'MiniMax-Text-01' },
+    doubao:       { name: '火山引擎 豆包', base_url: 'https://ark.cn-beijing.volces.com/api/v3',                 model: 'doubao-pro-32k' },
+    siliconflow:  { name: 'SiliconFlow',  base_url: 'https://api.siliconflow.cn/v1',                            model: 'Qwen/Qwen2.5-7B-Instruct' },
+    custom:       { name: '自定义',        base_url: '',                                                         model: '' },
+};
+
+function populatePresetSelects() {
+    const opts = Object.entries(PROVIDER_PRESETS).map(([k, v]) =>
+        `<option value="${k}">${v.name}${v.model ? ' (' + v.model + ')' : ''}</option>`
+    ).join('');
+    document.getElementById('cfg-thinking-preset').innerHTML = '<option value="">-- 选择预设 --</option>' + opts;
+    document.getElementById('cfg-memory-preset').innerHTML = '<option value="">-- 选择预设 --</option>' + opts;
+}
+
+function applyThinkingPreset(key) {
+    const p = PROVIDER_PRESETS[key];
+    if (!p) return;
+    if (p.base_url) document.getElementById('cfg-thinking-url').value = p.base_url;
+    if (p.model) document.getElementById('cfg-thinking-model').value = p.model;
+}
+
+function applyMemoryPreset(key) {
+    const p = PROVIDER_PRESETS[key];
+    if (!p) return;
+    if (p.base_url) document.getElementById('cfg-memory-url').value = p.base_url;
+    if (p.model) document.getElementById('cfg-memory-model').value = p.model;
+}
+
+function detectPresetByUrl(url) {
+    if (!url) return '';
+    const u = url.toLowerCase();
+    if (u.includes('api.openai.com')) return 'openai';
+    if (u.includes('api.deepseek.com')) return 'deepseek';
+    if (u.includes('anthropic.com')) return 'anthropic';
+    if (u.includes('dashscope') || u.includes('aliyuncs')) return 'qwen';
+    if (u.includes('bigmodel.cn')) return 'zhipu';
+    if (u.includes('moonshot.cn') || u.includes('kimi')) return 'moonshot';
+    if (u.includes('minimax.chat')) return 'minimax';
+    if (u.includes('volces.com')) return 'doubao';
+    if (u.includes('siliconflow.cn')) return 'siliconflow';
+    return '';
+}
+
+async function testThinkingProvider() {
+    const tk = document.getElementById('cfg-thinking-key').value.trim();
+    const tu = document.getElementById('cfg-thinking-url').value.trim();
+    const tm = document.getElementById('cfg-thinking-model').value.trim();
+    if (!tk || !tu || !tm) { showToast('请先填写完整的 API Key、Base URL 和模型', 'error'); return; }
+    showToast('正在测试连接...');
+    const r = await api('/proxy/thinking-provider/test', {method:'POST', body:{api_key:tk,base_url:tu,model:tm}});
+    if (r.success) showToast('连接测试成功');
+    else showToast('连接失败: ' + (r.message||'未知错误'), 'error');
+}
+
+let settingsData = {};
+
+async function loadHeartbeatConfig() {
+    const cfg = await api('/proxy/heartbeat-config');
+    if (cfg.error) return;
+    document.getElementById('cfg-hb-enabled').checked = cfg.enabled !== false;
+    document.getElementById('cfg-hb-interval').value = cfg.interval || 500;
+    document.getElementById('cfg-hb-url').value = cfg.backend_url || 'http://localhost:8000';
+}
+
+async function saveHeartbeatConfig() {
+    const body = {
+        enabled: document.getElementById('cfg-hb-enabled').checked,
+        interval: parseInt(document.getElementById('cfg-hb-interval').value) || 500,
+        backend_url: document.getElementById('cfg-hb-url').value.trim(),
+    };
+    const r = await api('/proxy/heartbeat-config', {method:'POST', body});
+    showToast(r.message || (r.error || '操作完成'), r.error ? 'error' : 'success');
+}
+
+async function loadSettings() {
+    populatePresetSelects();
+    loadHeartbeatConfig();
+
+    // 加载模型配置（不依赖 settings API）
+    const [modelCfg, memCfg, res] = await Promise.all([
+        api('/proxy/model-config'),
+        api('/proxy/memory-llm-config'),
+        api('/proxy/settings'),
+    ]);
+
+    // 填充思考模型
+    if (!modelCfg.error && modelCfg.thinking_provider) {
+        const tp = modelCfg.thinking_provider;
+        if (tp.base_url) document.getElementById('cfg-thinking-url').value = tp.base_url;
+        if (tp.model) document.getElementById('cfg-thinking-model').value = tp.model;
+        const detected = detectPresetByUrl(tp.base_url);
+        if (detected) document.getElementById('cfg-thinking-preset').value = detected;
+    }
+
+    // 填充记忆系统模型
+    if (!memCfg.error) {
+        if (memCfg.base_url) document.getElementById('cfg-memory-url').value = memCfg.base_url;
+        if (memCfg.model) document.getElementById('cfg-memory-model').value = memCfg.model;
+        const memDetected = detectPresetByUrl(memCfg.base_url);
+        if (memDetected) document.getElementById('cfg-memory-preset').value = memDetected;
+    }
+
+    // 渲染 settings 区域
+    if (res.error || !res.data) {
+        document.getElementById('settings-container').innerHTML = '<div style="color:var(--danger)">加载失败: ' + (res.error || '未知错误') + '</div>';
+    } else {
+        settingsData = res.data;
+        renderSettings();
+    }
+}
+
+async function saveApiKeys() {
+    const tk = document.getElementById('cfg-thinking-key').value.trim();
+    const tu = document.getElementById('cfg-thinking-url').value.trim();
+    const tm = document.getElementById('cfg-thinking-model').value.trim();
+    const mk = document.getElementById('cfg-memory-key').value.trim();
+    const mu = document.getElementById('cfg-memory-url').value.trim();
+
+    let anyOk = true;
+
+    if (tk || tu || tm) {
+        const body = {base_url: tu, model: tm};
+        if (tk) body.api_key = tk;
+        const r = await api('/proxy/thinking-provider', {method:'PUT', body});
+        if (r.error) { showToast('LLM: ' + r.error, 'error'); anyOk = false; }
+    }
+    if (mk || mu) {
+        const mm = document.getElementById('cfg-memory-model').value.trim();
+        const mp = document.getElementById('cfg-memory-preset').value;
+        const body = {};
+        if (mk) body.api_key = mk;
+        if (mu) body.base_url = mu;
+        if (mm) body.model = mm;
+        if (mp === 'qwen') body.provider = 'qwen';
+        else if (mp === 'deepseek') body.provider = 'deepseek';
+        else if (mp) body.provider = 'openai_compatible';
+        const r = await api('/proxy/memory-llm-config', {method:'POST', body});
+        if (r.error) { showToast('记忆系统: ' + r.error, 'error'); anyOk = false; }
+    }
+
+    if (anyOk) showToast('API 配置已保存并生效');
+}
+
+function renderSettings() {
+    const container = document.getElementById('settings-container');
+    let html = '';
+    for (const [section, meta] of Object.entries(SETTINGS_META)) {
+        const data = settingsData[section] || {};
+        const isRestart = meta.restart || false;
+        html += `<div class="settings-section">
+            <div class="settings-header" onclick="toggleSettingsSection(this)">
+                <h4>${meta.icon} ${meta.label} <span class="badge ${isRestart ? 'restart' : 'live'}">${isRestart ? '需重启' : '实时生效'}</span></h4>
+                <span class="arrow" style="transition:transform .2s">&#9660;</span>
+            </div>
+            <div class="settings-body">
+                <div class="settings-grid">`;
+        for (const [key, field] of Object.entries(meta.fields)) {
+            const val = data[key] !== undefined ? data[key] : '';
+            html += `<div class="form-group"><label>${field.label}</label>`;
+            if (field.type === 'bool') {
+                html += `<label class="toggle"><input type="checkbox" data-section="${section}" data-key="${key}" ${val ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
+            } else if (field.type === 'select') {
+                html += `<select data-section="${section}" data-key="${key}">`;
+                for (const opt of field.options) {
+                    html += `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`;
+                }
+                html += `</select>`;
+            } else if (field.type === 'password') {
+                html += `<input type="password" data-section="${section}" data-key="${key}" value="${escHtml(String(val))}" placeholder="不修改请留空">`;
+            } else {
+                const inputType = field.type === 'int' || field.type === 'float' ? 'number' : 'text';
+                const step = field.step || (field.type === 'float' ? '0.1' : undefined);
+                html += `<input type="${inputType}" data-section="${section}" data-key="${key}" value="${escHtml(String(val))}"${field.min !== undefined ? ' min="' + field.min + '"' : ''}${field.max !== undefined ? ' max="' + field.max + '"' : ''}${step ? ' step="' + step + '"' : ''}>`;
+            }
+            html += `</div>`;
+        }
+        html += `</div>
+                <div class="settings-actions">
+                    <button class="btn btn-primary btn-sm" onclick="saveSettings('${section}')">保存 ${meta.label}</button>
+                </div>
+            </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+}
+
+function toggleSettingsSection(header) {
+    const body = header.nextElementSibling;
+    const arrow = header.querySelector('.arrow');
+    body.classList.toggle('collapsed');
+    arrow.style.transform = body.classList.contains('collapsed') ? 'rotate(-90deg)' : '';
+}
+
+async function saveSettings(section) {
+    const meta = SETTINGS_META[section];
+    const data = {};
+    const inputs = document.querySelectorAll(`[data-section="${section}"]`);
+    for (const el of inputs) {
+        const key = el.dataset.key;
+        const field = meta.fields[key];
+        if (!field) continue;
+        if (field.type === 'bool') {
+            data[key] = el.checked;
+        } else if (field.type === 'int') {
+            data[key] = parseInt(el.value);
+        } else if (field.type === 'float') {
+            data[key] = parseFloat(el.value);
+        } else {
+            data[key] = el.value;
+        }
+    }
+    const res = await api('/proxy/settings/' + section, {method:'PUT', body: data});
     showToast(res.message || (res.error || '操作完成'), res.error ? 'error' : 'success');
 }
 

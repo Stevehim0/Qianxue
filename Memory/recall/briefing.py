@@ -80,7 +80,7 @@ class BriefingGenerator:
             if exp.emotion_category:
                 line += f"（{exp.emotion_category}）"
             if exp.time_distance_days:
-                from Memory.core.time_utils import format_time_distance
+                from Memory.utils.time_utils import format_time_distance
                 distance_str = format_time_distance(exp.time_distance_days)
                 if distance_str:
                     line += f"（{distance_str}）"

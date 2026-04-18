@@ -13,6 +13,7 @@ from .tools.registry import ToolRegistry
 
 from backend.api.llm import llm_manager
 from backend.api.napcat import napcat_client
+from backend.config import settings
 from backend.services.core.loader import identity_loader
 from backend.services.core.prompt_builder import build_system_prompt
 
@@ -31,7 +32,7 @@ class AgentBrain:
 
     def __init__(self, tool_registry: ToolRegistry):
         self.tool_registry = tool_registry
-        self.max_iterations = 5  # 最大思考轮次
+        self.max_iterations = settings.brain.max_iterations  # 最大思考轮次
 
     async def process_message(self, message: AgentMessage) -> AgentThought:
         """
@@ -100,7 +101,7 @@ class AgentBrain:
 
             # 第3.5步：中间回复——耗时工具执行前提示用户
             # 快速工具（get_time, get_context）不需要 interim，避免简单对话显得不自然
-            FAST_TOOLS = {"get_time", "get_context"}
+            FAST_TOOLS = set(settings.brain.fast_tools)
             called_tool_names = {tc.get("tool_name") for tc in tool_calls}
             has_slow_tool = bool(called_tool_names - FAST_TOOLS - {"send_message"})
             has_send = any(tc.get("tool_name") == "send_message" for tc in tool_calls)
@@ -116,22 +117,7 @@ class AgentBrain:
             elif has_slow_tool and not has_send and not interim_sent:
                 interim_sent = True
                 import random
-                auto_msgs = [
-                    "嗯...让我想想",
-                    "等一下哈",
-                    "我想想...",
-                    "稍等",
-                    "让我回忆一下",
-                    "嗯.....",
-                    "哈......",
-                    "啊...",
-                    "唔...",
-                    "诶...",
-                    "呃...",
-                    "嗯...",
-                    "等等哈",
-                    "等下",
-                ]
+                auto_msgs = settings.brain.interim_messages
                 auto_msg = random.choice(auto_msgs)
                 logger.info(f"自动发送中间消息: {auto_msg}")
                 asyncio.create_task(self._send_interim_message(message, auto_msg))
@@ -255,8 +241,8 @@ class AgentBrain:
 
         try:
             import httpx
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get("http://localhost:8001/api/state")
+            async with httpx.AsyncClient(timeout=settings.brain.state_api_timeout) as client:
+                resp = await client.get(settings.brain.state_api_url)
                 if resp.status_code == 200:
                     mood_label = resp.json().get("mood_label", "平静")
         except Exception:
@@ -463,8 +449,8 @@ class AgentBrain:
         try:
             messages = await context_manager.get_group_context(
                 group_id=message.group_id,
-                limit=20,
-                time_window_minutes=60,
+                limit=settings.brain.context_limit,
+                time_window_minutes=settings.brain.context_time_window,
             )
             if messages:
                 context_text = context_manager.format_group_context_for_llm(messages)
@@ -474,7 +460,7 @@ class AgentBrain:
                     last_msg = messages[-1]
                     last_time = datetime.fromisoformat(last_msg.timestamp)
                     gap_seconds = (datetime.now() - last_time).total_seconds()
-                    if gap_seconds > 600:  # 超过10分钟标注间隔
+                    if gap_seconds > settings.brain.gap_threshold:  # 超过阈值标注间隔
                         gap_str = format_gap(gap_seconds)
                         context_text = "[距上一条消息已过 " + gap_str + "]\n" + context_text
                 except Exception:
@@ -696,7 +682,7 @@ class AgentBrain:
     ) -> None:
         """发送中间消息到用户（思考过程中的简短提示）。"""
         try:
-            text = text[:50] if len(text) > 50 else text
+            text = text[:settings.brain.interim_max_length] if len(text) > settings.brain.interim_max_length else text
 
             if message.is_private:
                 await napcat_client.send_private_message(int(message.user_id), text)
@@ -705,22 +691,6 @@ class AgentBrain:
             logger.info("中间消息已发送: " + text)
         except Exception as e:
             logger.warning("中间消息发送失败（非关键）: " + str(e))
-
-    async def _refine_with_speaking_model(self, draft_message: str, original_message: AgentMessage) -> Optional[str]:
-        """使用说话模型润色消息内容。"""
-        speaking_provider = llm_manager.get_speaking_provider()
-        if not speaking_provider:
-            return None
-
-        thinking_provider = llm_manager.get_thinking_provider()
-        if thinking_provider and speaking_provider is thinking_provider:
-            return None
-
-        refine_prompt = "你是一个消息润色助手。请将以下草稿消息润色为更自然、更口语化的回复。\n\n要求：\n- 保持原始意图和核心信息不变\n- 使语气更自然、更像真人说话\n- 不要添加草稿中没有的信息\n- 只返回润色后的消息内容\n\n草稿消息：\n" + draft_message
-
-        messages = [{"role": "user", "content": refine_prompt}]
-        response = await llm_manager.speaking_chat(messages=messages)
-        return response.strip() if response else None
 
     _last_proactive_speak: Dict[str, datetime] = {}
     _proactive_speak_count: int = 0
@@ -778,8 +748,8 @@ class AgentBrain:
             try:
                 messages = await context_manager.get_group_context(
                     group_id=gid,
-                    limit=10,
-                    time_window_minutes=0.5,
+                    limit=settings.brain.proactive_context_limit,
+                    time_window_minutes=settings.brain.proactive_context_time_window,
                 )
 
                 if messages:
@@ -826,8 +796,8 @@ class AgentBrain:
 
         try:
             import httpx
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get("http://localhost:8001/api/state")
+            async with httpx.AsyncClient(timeout=settings.brain.state_api_timeout) as client:
+                resp = await client.get(settings.brain.state_api_url)
                 if resp.status_code == 200:
                     state_data = resp.json()
                     state_text = state_data.get("state_prompt", "")
@@ -853,13 +823,13 @@ class AgentBrain:
         now = datetime.now()
 
         last = self._last_proactive_speak.get(group_id)
-        if last and (now - last).seconds < 120:
+        if last and (now - last).seconds < settings.brain.proactive_speak_cooldown:
             return False
 
         if self._proactive_speak_hour_start:
             elapsed = (now - self._proactive_speak_hour_start).seconds
             if elapsed < 3600:
-                if self._proactive_speak_count >= 3:
+                if self._proactive_speak_count >= settings.brain.proactive_speak_max_per_hour:
                     return False
             else:
                 self._proactive_speak_count = 0
