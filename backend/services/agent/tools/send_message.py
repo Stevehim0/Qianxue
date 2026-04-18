@@ -134,7 +134,7 @@ class SendMessageTool(Tool):
                             user_id=str(napcat_client.self_id),
                             content=reply,
                             role="assistant",
-                            speaker="Iris",
+                            speaker="千雪",
                             source_type=source_type,
                         )
                     )
