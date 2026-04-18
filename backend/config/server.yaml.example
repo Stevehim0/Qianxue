@@ -1,0 +1,11 @@
+# 服务端配置
+# 文件: server.yaml — 环境变量: QIANXUE_SERVER__PORT=9000
+
+host: "0.0.0.0"
+port: 8000
+log_level: "info"         # debug / info / warning / error
+reload: true              # 开发模式热重载
+
+# SSE 日志流
+sse:
+  heartbeat_timeout: 1.0  # 秒，SSE keepalive 间隔

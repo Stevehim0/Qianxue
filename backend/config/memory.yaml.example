@@ -1,0 +1,23 @@
+# Memory 服务连接
+# 文件: memory.yaml — 环境变量: QIANXUE_MEMORY__SERVICE_URL=http://mem:8001
+
+service_url: "http://localhost:8001"
+
+# Memory HTTP 客户端超时（秒）
+provider_timeout:
+  connect: 5.0
+  read: 60.0
+  write: 10.0
+  pool: 10.0
+
+# STM 客户端超时（秒）
+stm_timeout:
+  connect: 3.0
+  read: 10.0
+  write: 5.0
+  pool: 5.0
+
+# 用户档案自动创建
+profile:
+  ensure_timeout: 5.0     # 档案确认请求超时（秒）
+  turn_threshold: 10      # 对话轮次达到此值后自动创建档案

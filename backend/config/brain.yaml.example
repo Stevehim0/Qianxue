@@ -1,0 +1,57 @@
+# AgentBrain 思考引擎
+
+brain:
+  max_iterations: 5       # 最大思考轮次
+
+# 快速工具（不触发中间消息）
+fast_tools:
+  - "get_time"
+  - "get_context"
+
+# 中间回复文案池（耗时工具执行前自动发送）
+interim_messages:
+  - "嗯...让我想想"
+  - "等一下哈"
+  - "我想想..."
+  - "稍等"
+  - "让我回忆一下"
+  - "嗯....."
+  - "哈......"
+  - "啊..."
+  - "唔..."
+  - "诶..."
+  - "呃..."
+  - "嗯..."
+  - "等等哈"
+  - "等下"
+
+interim:
+  max_length: 50          # 中间消息最大长度（字符）
+
+# Memory State API（用于获取精力/情绪状态）
+state_api:
+  timeout: 3.0            # 秒
+
+# 被动回复时的对话上下文
+context:
+  limit: 20               # 消息条数
+  time_window: 60         # 分钟
+  gap_threshold: 600      # 秒，超过此间隔标注对话间隔
+
+# 主动思考（心跳触发）
+proactive:
+  context_limit: 10       # 每个群的上下文条数
+  context_time_window: 0.5  # 分钟（30秒）
+  speak_cooldown: 120     # 同群主动发言冷却（秒）
+  speak_max_per_hour: 3   # 每群每小时最大主动发言次数
+
+# 消息分类阈值
+message:
+  mention_priority: 10    # @消息的优先级阈值
+  significant_length: 20  # 超过此长度的消息记为 significant_msg
+
+# STM 事件重要度
+stm_importance:
+  user_mention: 0.7       # 被 @
+  significant_msg: 0.4    # 有意义的普通消息
+  private_chat: 0.8       # 私聊消息

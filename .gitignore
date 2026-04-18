@@ -31,6 +31,9 @@ ENV/
 
 # LLM config (contains API keys)
 backend/llm_config.yaml
+backend/config/llm.yaml
+backend/config/admin.yaml
+backend/config/vision.yaml
 
 # Testing
 .pytest_cache/

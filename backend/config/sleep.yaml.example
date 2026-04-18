@@ -1,0 +1,17 @@
+# 睡眠管理器
+# 文件: sleep.yaml — 环境变量: QIANXUE_SLEEP__ENABLED=true
+
+enabled: false            # 设为 true 启用睡眠节律
+wind_down_hour: 23        # 开始困倦
+sleep_hour: 0             # 入睡
+wake_hour: 8              # 唤醒
+
+# 能量值
+energy:
+  awake_value: 0.8
+  awake_label: "充沛"
+  tired_value: 0.3
+  tired_label: "困倦"
+
+# 状态检查间隔
+check_interval: 60        # 秒

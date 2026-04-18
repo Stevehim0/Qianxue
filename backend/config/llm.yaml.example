@@ -1,0 +1,22 @@
+# LLM 模型配置
+# 修改后需重启 Backend 生效
+
+# 思考模型 - 用于 AgentBrain 推理、工具决策
+thinking_provider:
+  api_key: YOUR_API_KEY_HERE
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+
+# 说话模型 - 用于生成最终自然语言回复
+# 支持任何 OpenAI 兼容接口，修改 base_url / model / api_key 即可切换
+speaking_provider:
+  api_key: YOUR_API_KEY_HERE
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+
+# Anthropic 专用设置
+anthropic:
+  max_tokens: 1024
+
+# HTTP 客户端超时（秒），适用于所有 LLM Provider
+api_timeout: 120.0

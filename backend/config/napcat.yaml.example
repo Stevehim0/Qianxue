@@ -1,0 +1,5 @@
+# NapCat 连接
+# 文件: napcat.yaml — 环境变量: QIANXUE_NAPCAT__HTTP_URL=http://napcat:3000
+
+http_url: "http://localhost:3000"
+timeout: 30.0

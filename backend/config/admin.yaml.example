@@ -1,0 +1,8 @@
+# 管理员通知
+# 文件: admin.yaml — 环境变量: QIANXUE_ADMIN__QQ_ID=12345
+
+qq_id: ""                 # 管理员QQ号，用于接收系统错误通知
+
+# 通知冷却
+notification:
+  cooldown_seconds: 60    # 同类错误通知间隔（秒）

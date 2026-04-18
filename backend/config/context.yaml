@@ -1,0 +1,8 @@
+# 上下文管理
+
+group_context:
+  limit: 50               # 群聊上下文最大消息条数
+  time_window: 30         # 群聊上下文时间窗口（分钟）
+
+memory_recall:
+  limit: 5                # 每次记忆召回最大条数
