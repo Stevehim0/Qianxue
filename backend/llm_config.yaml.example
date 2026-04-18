@@ -1,0 +1,50 @@
+# LLM API 配置
+# 复制此文件为 llm_config.yaml 并填入你的 API Key
+# cp llm_config.yaml.example llm_config.yaml
+
+# 思考模型 - 用于 AgentBrain 推理、工具决策
+thinking_provider:
+  api_key: YOUR_API_KEY_HERE
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+
+# 说话模型 - 用于生成最终自然语言回复
+# 支持任何 OpenAI 兼容接口，修改 base_url / model / api_key 即可切换
+speaking_provider:
+  api_key: YOUR_API_KEY_HERE
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+
+# ============================================================
+# 兼容旧配置（active_provider 仍可用，作为 thinking_provider 的别名）
+# ============================================================
+# active_provider: deepseek
+# providers:
+#   deepseek:
+#     api_key: YOUR_API_KEY_HERE
+#     base_url: https://api.deepseek.com
+#     model: deepseek-chat
+#   qwen:
+#     api_key: YOUR_API_KEY_HERE
+#     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+#     model: qwen-plus
+#   openai:
+#     api_key: YOUR_API_KEY_HERE
+#     base_url: https://openai.com/v1
+#     model: gpt-4o-mini
+
+# AgentBrain 参数
+brain:
+  max_iterations: 6        # 最大思考轮次
+
+# Memory 服务连接
+memory:
+  service_url: http://localhost:8001
+
+# NapCat 连接
+napcat:
+  http_url: http://localhost:3000
+
+# 管理员通知
+admin:
+  qq_id: "YOUR_QQ_ID"  # 管理员QQ号，用于接收系统错误通知（私聊方式）

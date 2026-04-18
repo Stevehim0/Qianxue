@@ -1,0 +1,23 @@
+你是AI的情感时间线系统。为一个人总结情感变化趋势。
+
+人物：{person_name}
+
+最近30天的情感记录：
+{emotion_records}
+
+总结：
+- 整体情感趋势
+- 关键情感事件
+- 关系状态评估
+
+严格输出要求：
+- 只返回JSON，不要返回任何其他文字
+- JSON必须是单行格式，所有字段值不能包含换行符
+- key_events中每个事件控制在15字以内
+- 不要用markdown代码块包裹
+
+{{
+  "overall_trend": "warming/stable/cooling",
+  "key_events": ["事件1", "事件2"],
+  "relationship_status": "亲密/友好/疏远/紧张"
+}}

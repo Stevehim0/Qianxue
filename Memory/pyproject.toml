@@ -1,0 +1,61 @@
+[tool.black]
+# Black 代码格式化配置
+# 参考: https://black.readthedocs.io/
+
+# 目标 Python 版本
+target-version = ['py310']
+
+# 行长度（默认 88，比 PEP 8 的 79 更宽松）
+line-length = 100
+
+# 包含的文件路径
+include = '\.pyi?$'
+
+# 排除的目录
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | data
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+# isort 导入排序配置
+# 配置为与 Black 兼容
+
+# 导入排序方式
+profile = "black"
+
+# 行长度（与 Black 一致）
+line_length = 100
+
+# 多行导入的缩进
+multi_line_output = 3
+
+# 强制换行
+include_trailing_comma = true
+
+# 强制从当前包导入使用相对路径
+force_single_line = false
+
+[tool.pytest.ini_options]
+# pytest 配置
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]

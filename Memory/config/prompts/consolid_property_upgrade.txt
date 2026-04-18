@@ -1,0 +1,27 @@
+你是AI的实体属性升级系统。基于新的体验，更新实体属性。
+
+实体：{entity_name}
+
+当前属性：
+{current_properties}
+
+新体验：
+{new_experiences}
+
+检查属性：{property_name}
+
+判断：
+- 这个属性在5次以上体验中被验证
+- 属性值应该更新或新增
+
+严格输出要求：
+- 只返回JSON，不要返回任何其他文字
+- JSON必须是单行格式，不能包含换行符
+- 不要用markdown代码块包裹
+
+{{
+  "should_upgrade": true/false,
+  "property_name": "属性名",
+  "new_value": "新值或null",
+  "confidence": 0.0-1.0
+}}

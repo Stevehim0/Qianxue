@@ -1,0 +1,61 @@
+
+# 模型文件
+models/
+mqianxue_model_part.tar
+
+# 日志文件
+logs/
+
+# 临时文件
+temp/
+
+# Runtime data (Memory system)
+Memory/data/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+
+# LLM config (contains API keys)
+backend/llm_config.yaml
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model cache
+.cache/
+
+# MyPy
+.mypy_cache/
+
+# Claude Code (local settings, worktrees)
+.claude/
+
+# GSD Planning (internal development docs)
+.planning/

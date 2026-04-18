@@ -1,0 +1,111 @@
+[MASTER]
+# Pylint 配置文件
+# 参考: https://pylint.pycqa.org/
+
+# 并行作业数（使用多核加速）
+jobs=1
+
+# 加载的插件
+load-plugins=
+
+# 设置可用的 CPU 核心数（0 表示使用所有核心）
+# jobs=0
+
+[MESSAGES CONTROL]
+# 禁用某些警告和错误
+
+# 禁用 C0111: 缺少 docstring（我们会手动检查）
+# disable=missing-docstring
+
+# 禁用 C0103: 变量名不符合命名规范（允许短变量名）
+# disable=invalid-name
+
+# 禁用 R0903: 类的方法太少（有时是合理的）
+# disable=too-few-public-methods
+
+# 禁用 R0913: 参数太多（有时是必要的）
+# disable=too-many-arguments
+
+# 禁用 R0914: 局部变量太多（有时是必要的）
+# disable=too-many-locals
+
+# 禁用 C0301: 行太长（我们使用 line-length=100）
+# disable=line-too-long
+
+# 禁用 W0212: 访问受保护成员（有时需要测试）
+# disable=protected-access
+
+# 禁用 R0915: 语句太多（有时复杂函数是必要的）
+# disable=too-many-statements
+
+# 禁用 C0200: enumerate 使用（for i in range(len)) - 暂时保留
+# disable=consider-using-enumerate
+
+[FORMAT]
+# 格式选项
+
+# 最大行长度（与 Black 一致）
+max-line-length=100
+
+# 缩进字符串
+indent-string='    '
+
+[BASIC]
+# 基本选项
+
+# 好的变量名模式
+good-names=i,j,k,ex,Run,_,id,h,w,x,y,z
+
+# 类属性名风格
+attr-rgx=[a-z_][a-z0-9_]{2,30}$
+
+[DESIGN]
+# 设计选项
+
+# 最大参数数量
+max-args=7
+
+# 最大局部变量数量
+max-locals=15
+
+# 最大返回值数量
+max-returns=6
+
+# 最大分支数量
+max-branches=12
+
+# 最大语句数量
+max-statements=50
+
+# 最大父类数量
+max-parents=7
+
+# 最大方法数量
+max-methods=20
+
+# 最大属性数量
+max-attributes=7
+
+# 最小公共方法数量
+min-public-methods=2
+
+[IMPORTS]
+# 导入选项
+
+# 禁用的模块
+deprecated-modules=regsub,TERMIOS,Bastion,rexec
+
+[SIMILARITIES]
+# 相似代码检测
+
+# 忽略类似代码的行数
+min-similarity-lines=4
+
+# 忽略注释
+ignore-comments=yes
+
+# 忽略文档字符串
+ignore-docstrings=yes
+
+# 忽略 __dunder__ 方法
+ignore-dunder-names=yes

@@ -1,0 +1,23 @@
+你是AI的隐性关联发现系统。判断两个实体之间是否存在隐性关联。
+
+实体A：{entity_a}
+实体B：{entity_b}
+
+共同出现的上下文：
+{shared_context}
+
+关联类型：related（相关）、conflict（冲突）、depends（依赖）
+置信度：0-1
+
+严格输出要求：
+- 只返回JSON，不要返回任何其他文字
+- JSON必须是单行格式，不能包含换行符
+- reason字段控制在15字以内，不含换行和特殊字符
+- 不要用markdown代码块包裹
+
+{{
+  "has_relation": true/false,
+  "relation_type": "related|conflict|depends|none",
+  "confidence": 0.0-1.0,
+  "reason": "简短原因"
+}}

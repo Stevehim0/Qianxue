@@ -1,0 +1,36 @@
+# 记忆重组任务
+
+你需要分析两段记忆之间是否存在隐藏的关联关系。
+
+## 记忆A
+L0摘要: {memory_a_L0}
+L1细节: {memory_a_L1}
+
+## 记忆B
+L0摘要: {memory_b_L0}
+L1细节: {memory_b_L1}
+
+## 任务要求
+判断这两段记忆是否存在以下类型的关联：
+- **时序关联**: 发生时间相近或有因果关系
+- **主题关联**: 涉及相同的话题、活动或概念
+- **因果关联**: 一个记忆导致或影响另一个记忆
+- **联想关联**: 表面不相关但深层有联系（隐喻、类比）
+
+## 严格输出要求
+- 只返回JSON，不要返回任何其他文字或注释
+- JSON必须是单行格式，所有字段值不能包含换行符
+- explanation字段控制在30字以内，不含换行和特殊字符
+- 不要用markdown代码块包裹
+
+{{
+    "has_relationship": true/false,
+    "relationship_type": "temporal|thematic|causal|associative",
+    "confidence": 0.0-1.0,
+    "explanation": "简短原因"
+}}
+
+注意:
+- 关联不必强逻辑，梦境允许跳跃性联想
+- 置信度<0.5的关联不创建边
+- 如果无明显关联，返回has_relationship=false

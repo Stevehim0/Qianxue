@@ -1,0 +1,32 @@
+分析以下对话中"我"（AI）的情感状态。
+
+# AI的性格（仅作为分析参考，帮助你判断AI会对这段对话产生什么感受）
+{ai_personality}
+
+基础情感类别：joy/sadness/anger/fear/surprise/disinterest/curiosity/neutral
+也可以用自定义描述词。
+
+**重要：只返回JSON，不要返回任何其他内容、解释或注释。JSON必须是单行格式，不要包含换行符，不要用markdown代码块包裹。**
+
+输出格式（纯JSON）：
+{{
+  "category": "情感类别",
+  "intensity": 0.0-1.0,
+  "valence": -1.0到1.0,
+  "arousal": 0.0到1.0
+}}
+
+注意：
+- 这是"我"的感受，不是对话中其他人的感受
+- 这是对整个对话的情感体验，不指向某个具体人
+- valence：负面=-1，中性=0，正面=+1
+- arousal：平静=0，激动=1
+
+对话：
+{dialogue}
+
+当前上下文：
+状态层 focus：{state_focus}
+状态层 mood：{state_mood_label}
+
+**记住：只返回上面的JSON格式，不要添加任何解释文本。**
