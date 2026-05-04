@@ -43,7 +43,7 @@ class VoiceService:
         """检测音频数据格式（基于文件头魔数）"""
         if audio_data[:4] == b'RIFF':
             return 'wav'
-        if audio_data[:3] in (b'\xff\xfb', b'\xff\xf3', b'\xff\xf2'):
+        if audio_data[:2] in (b'\xff\xfb', b'\xff\xf3', b'\xff\xf2'):
             return 'mp3'
         if audio_data[:4] == b'OggS':
             return 'ogg'
