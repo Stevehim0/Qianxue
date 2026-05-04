@@ -6,6 +6,8 @@ import json
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+import httpx
+
 from .message import AgentMessage
 from .thought import AgentThought, ThoughtStatus
 from .tool_call import ToolCall, ToolCallStatus
@@ -33,6 +35,43 @@ class AgentBrain:
     def __init__(self, tool_registry: ToolRegistry):
         self.tool_registry = tool_registry
         self.max_iterations = settings.brain.max_iterations  # 最大思考轮次
+        self._state_client: Optional[httpx.AsyncClient] = None
+        # 用户档案缓存: user_id -> (text, expire_time)
+        self._profile_cache: Dict[str, tuple[str, float]] = {}
+        self._PROFILE_CACHE_TTL = 300.0  # 5 分钟
+        # 对话活跃状态: key (group_id / private_xxx) -> expire_time
+        self._active_conversations: Dict[str, float] = {}
+
+    async def _get_state_client(self) -> httpx.AsyncClient:
+        """获取持久 HTTP 客户端（连接池复用）。"""
+        if self._state_client is None or self._state_client.is_closed:
+            self._state_client = httpx.AsyncClient(
+                timeout=settings.brain.state_api_timeout,
+            )
+        return self._state_client
+
+    async def close(self):
+        """释放资源。"""
+        if self._state_client and not self._state_client.is_closed:
+            await self._state_client.aclose()
+            self._state_client = None
+
+    def mark_conversation_active(self, key: str):
+        """标记某个群/私聊正在对话中（消息入队时调用）。
+
+        活跃窗口覆盖 debounce 等待 + AI 处理 + 对方可能回复的时间。
+        """
+        self._active_conversations[key] = asyncio.get_event_loop().time() + 120.0
+
+    def _is_conversation_active(self, key: str) -> bool:
+        """检查某个群/私聊是否正在对话中。"""
+        expire = self._active_conversations.get(key)
+        if expire is None:
+            return False
+        if asyncio.get_event_loop().time() < expire:
+            return True
+        del self._active_conversations[key]
+        return False
 
     async def process_message(self, message: AgentMessage) -> AgentThought:
         """
@@ -149,19 +188,10 @@ class AgentBrain:
 
             # 第6步：检查是否完成（在执行工具之后）
             if llm_response.get("done"):
-                # 如果 send_message 被截断，强制再走一轮让模型继续发送
-                send_truncated = any(
-                    isinstance(r, dict) and r.get("truncated")
-                    for r in execution_results.values()
-                )
-                if send_truncated and iteration + 1 < self.max_iterations:
-                    logger.info("send_message 被截断，强制进入下一轮继续发送")
-                    llm_response["done"] = False
-                else:
-                    thought.status = ThoughtStatus.COMPLETE
-                    thought.reason = "思考完成"
-                    logger.info("LLM表示思考完成")
-                    break
+                thought.status = ThoughtStatus.COMPLETE
+                thought.reason = "思考完成"
+                logger.info("LLM表示思考完成")
+                break
 
         # 如果达到最大轮次仍未完成，强制完成
         if thought.status != ThoughtStatus.COMPLETE:
@@ -223,30 +253,8 @@ class AgentBrain:
 请根据工具结果决定是否需要继续调用工具或完成回复。
 注意：search_memory 返回的内容仅供你参考，你需要自己判断其相关性，自然地融入回复中，不要照搬搜索结果。"""
 
-        # 从核心层构建 system prompt（包含 STM 感知 + 精力状态）
-        stm_perception_text = ""
-        try:
-            from backend.services.stm_client import stm_client
-            stm_perception_text = await stm_client.get_perception() or ""
-        except Exception:
-            pass
-
-        energy_label = "充沛"
-        mood_label = "平静"
-        try:
-            from backend.services.sleep_manager import sleep_manager
-            energy_label = sleep_manager.energy_label
-        except Exception:
-            pass
-
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=settings.brain.state_api_timeout) as client:
-                resp = await client.get(settings.brain.state_api_url)
-                if resp.status_code == 200:
-                    mood_label = resp.json().get("mood_label", "平静")
-        except Exception:
-            pass
+        # 从核心层构建 system prompt（并行获取 STM 感知 + 精力 + 情绪）
+        stm_perception_text, energy_label, mood_label = await self._fetch_context_state()
 
         system_prompt = build_system_prompt(
             identity=identity_loader.identity,
@@ -311,6 +319,37 @@ class AgentBrain:
                 "thought_content": "",
                 "tool_calls": []
             }
+
+    async def _fetch_context_state(self) -> tuple[str, str, str]:
+        """并行获取 STM 感知、精力标签、情绪标签。"""
+        async def _get_stm():
+            try:
+                from backend.services.stm_client import stm_client
+                return await stm_client.get_perception() or ""
+            except Exception:
+                return ""
+
+        async def _get_energy():
+            try:
+                from backend.services.sleep_manager import sleep_manager
+                return sleep_manager.energy_label
+            except Exception:
+                return "充沛"
+
+        async def _get_mood():
+            try:
+                client = await self._get_state_client()
+                resp = await client.get(settings.brain.state_api_url)
+                if resp.status_code == 200:
+                    return resp.json().get("mood_label", "平静")
+            except Exception:
+                pass
+            return "平静"
+
+        stm, energy, mood = await asyncio.gather(
+            _get_stm(), _get_energy(), _get_mood()
+        )
+        return stm, energy, mood
 
     def _parse_llm_response(self, response: str) -> Optional[dict]:
         """解析 LLM 响应为 JSON，兼容 markdown 代码块包裹。
@@ -389,11 +428,50 @@ class AgentBrain:
         if profile_text:
             header += "\n\n关于对方:\n" + profile_text
 
-        header += "\n用户消息: " + message.content
+        content = message.content
+        # 有真实图片描述时，去掉 NapCat 附带的 [图片] 占位文本
+        if message.has_image and message.image_description:
+            import re
+            content = re.sub(r'\[图片\]', '', content).strip()
+            header += "\n用户消息: " + content
+            header += "\n[图片内容]: " + message.image_description
+        else:
+            header += "\n用户消息: " + content
+
+        # 语音转写展示（per D-01/D-02: 占位符替换 + 转写标注）
+        if message.has_voice and message.voice_transcription:
+            import re
+            # 去掉 [语音] 占位符（如果存在）
+            content = re.sub(r'\[语音\]', '', content).strip()
+            # 更新用户消息行（如果上面已经被图片分支写过，需要覆盖）
+            header_lines = header.split('\n')
+            for i, line in enumerate(header_lines):
+                if line.startswith('用户消息: '):
+                    header_lines[i] = '用户消息: ' + content
+                    break
+            header = '\n'.join(header_lines)
+            header += "\n[语音消息转写]: " + message.voice_transcription
+
         return header
 
     async def _load_profile_text(self, user_id: str) -> str:
-        """从 Memory 服务加载用户档案，返回简短描述文本。"""
+        """从缓存或 Memory 服务加载用户档案，返回简短描述文本。"""
+        # 检查缓存
+        cached = self._profile_cache.get(user_id)
+        if cached:
+            text, expire_at = cached
+            if asyncio.get_event_loop().time() < expire_at:
+                return text
+
+        result = await self._fetch_profile_text(user_id)
+
+        # 写入缓存
+        now = asyncio.get_event_loop().time()
+        self._profile_cache[user_id] = (result, now + self._PROFILE_CACHE_TTL)
+        return result
+
+    async def _fetch_profile_text(self, user_id: str) -> str:
+        """实际从 Memory 服务获取用户档案。"""
         try:
             import backend.services.memory_interface as mem_mod
             nickname = mem_mod.memory_provider._nickname_map.get(user_id)
@@ -483,13 +561,7 @@ class AgentBrain:
                 formatted.append("- " + call_id + ": 执行失败")
             elif isinstance(result, dict) and "success" in result:
                 if result["success"]:
-                    if result.get("truncated"):
-                        formatted.append(
-                            "- " + call_id + ": 消息被截断！原长" + str(result['original_length']) + "字，"
-                            "上限" + str(result['max_length']) + "字，已发送前半部分。请继续发送剩余内容。"
-                        )
-                    else:
-                        formatted.append("- " + call_id + ": 已发送")
+                    formatted.append("- " + call_id + ": 已发送")
                 else:
                     error = result.get("error", "未知错误")
                     error_type = result.get("error_type", "")
@@ -562,7 +634,8 @@ class AgentBrain:
             "user_id": message.user_id,
             "sender_nickname": message.sender_nickname or "",
             "content": message.content,
-            "image_description": message.image_description or ""
+            "image_description": message.image_description or "",
+            "voice_transcription": message.voice_transcription or ""
         }
 
         variables.update(results)
@@ -585,17 +658,29 @@ class AgentBrain:
         message: AgentMessage,
         previous_results: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """执行工具调用（并行）"""
+        """执行工具调用。
+
+        send_message 按顺序串行（保证消息顺序），其余工具并行。
+        """
         results = {}
 
-        tasks = [
-            self._execute_single_tool(tool_call, message, previous_results)
-            for tool_call in tool_calls
-        ]
-        execution_results = await asyncio.gather(*tasks)
+        # 分离 send_message 和其他工具
+        send_msgs = [tc for tc in tool_calls if tc.tool_name == "send_message"]
+        others = [tc for tc in tool_calls if tc.tool_name != "send_message"]
 
-        for tool_call, result in zip(tool_calls, execution_results):
-            results[tool_call.tool_id] = result
+        # 其他工具并行执行
+        if others:
+            other_results = await asyncio.gather(*[
+                self._execute_single_tool(tc, message, previous_results)
+                for tc in others
+            ])
+            for tc, result in zip(others, other_results):
+                results[tc.tool_id] = result
+
+        # send_message 串行执行（保证消息顺序）
+        for tc in send_msgs:
+            result = await self._execute_single_tool(tc, message, previous_results)
+            results[tc.tool_id] = result
 
         return results
 
@@ -745,6 +830,11 @@ class AgentBrain:
             return {"has_activity": False, "group_summaries": {}}
 
         for gid in group_ids:
+            # 跳过正在对话中的群/私聊，避免心跳插嘴
+            if self._is_conversation_active(gid):
+                logger.debug(f"proactive_think: skip {gid}, conversation active")
+                continue
+
             try:
                 messages = await context_manager.get_group_context(
                     group_id=gid,
@@ -794,27 +884,34 @@ class AgentBrain:
         else:
             parts.append("\n各群最近没有新消息。")
 
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=settings.brain.state_api_timeout) as client:
+        # 并行获取状态 + STM 感知
+        async def _get_state_prompt():
+            try:
+                client = await self._get_state_client()
                 resp = await client.get(settings.brain.state_api_url)
                 if resp.status_code == 200:
-                    state_data = resp.json()
-                    state_text = state_data.get("state_prompt", "")
-                    if state_text:
-                        parts.append("\n## AI 当前状态\n" + state_text)
-        except Exception:
-            pass
+                    return resp.json().get("state_prompt", "")
+            except Exception:
+                pass
+            return ""
 
-        try:
-            from backend.services.stm_client import stm_client
-            perception = await stm_client.get_perception()
-            if perception:
-                parts.append("\n## 短期记忆\n" + perception)
-        except Exception:
-            pass
+        async def _get_stm_perception():
+            try:
+                from backend.services.stm_client import stm_client
+                return await stm_client.get_perception()
+            except Exception:
+                return None
 
-        parts.append("\n请决定你现在想做什么。大多数时候选择沉默就好。")
+        state_text, perception = await asyncio.gather(
+            _get_state_prompt(), _get_stm_perception()
+        )
+
+        if state_text:
+            parts.append("\n## AI 当前状态\n" + state_text)
+        if perception:
+            parts.append("\n## 短期记忆\n" + perception)
+
+        parts.append("\n请根据你的真实感受决定现在想做什么。")
 
         return "\n".join(parts)
 
