@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 class ContextManager:
     """对话上下文管理器"""
 
+    # 已确认存在的用户/群（启动后首次查 DB，后续跳过检查）
+    _known_users: set[str] = set()
+    _known_groups: set[str] = set()
+
     async def add_message(self, group_id: str, user_id: str, role: str, content: str):
         """添加对话消息到上下文"""
         conn = await get_db()
@@ -422,35 +426,39 @@ class ContextManager:
         """
         conn = await get_db()
 
-        # 确保用户存在于users表中
-        cursor = await conn.execute(
-            "SELECT user_id FROM users WHERE user_id = ?",
-            (user_id,)
-        )
-        if not await cursor.fetchone():
-            await conn.execute(
-                """
-                INSERT INTO users (user_id, nickname, user_type, message_count)
-                VALUES (?, ?, 'group_member', 1)
-                """,
-                (user_id, sender_nickname or user_id)
+        # 确保用户存在（首次见才查 DB，后续跳过）
+        if user_id not in self._known_users:
+            cursor = await conn.execute(
+                "SELECT user_id FROM users WHERE user_id = ?",
+                (user_id,)
             )
-            logger.info(f"自动创建用户记录: user_id={user_id}, nickname={sender_nickname}")
+            if not await cursor.fetchone():
+                await conn.execute(
+                    """
+                    INSERT INTO users (user_id, nickname, user_type, message_count)
+                    VALUES (?, ?, 'group_member', 1)
+                    """,
+                    (user_id, sender_nickname or user_id)
+                )
+                logger.info(f"自动创建用户记录: user_id={user_id}, nickname={sender_nickname}")
+            self._known_users.add(user_id)
 
-        # 确保群聊存在于groups表中
-        cursor = await conn.execute(
-            "SELECT group_id FROM groups WHERE group_id = ?",
-            (group_id,)
-        )
-        if not await cursor.fetchone():
-            await conn.execute(
-                """
-                INSERT INTO groups (group_id, enabled, auto_reply_enabled)
-                VALUES (?, 1, 1)
-                """,
+        # 确保群聊存在（首次见才查 DB）
+        if group_id not in self._known_groups:
+            cursor = await conn.execute(
+                "SELECT group_id FROM groups WHERE group_id = ?",
                 (group_id,)
             )
-            logger.info(f"自动创建群聊记录: group_id={group_id}")
+            if not await cursor.fetchone():
+                await conn.execute(
+                    """
+                    INSERT INTO groups (group_id, enabled, auto_reply_enabled)
+                    VALUES (?, 1, 1)
+                    """,
+                    (group_id,)
+                )
+                logger.info(f"自动创建群聊记录: group_id={group_id}")
+            self._known_groups.add(group_id)
 
         # 将@信息转换为可读文本并拼接到content前
         mentions_text = ""
@@ -604,6 +612,9 @@ class ContextManager:
             except Exception:
                 pass
 
+        # 注意：消息内容中可能包含 [语音消息转写] 或 [图片内容] 标记，
+        # 这些标记由消息来源方（如 DiscordSource）在构造消息时添加，
+        # context_manager 直接回显，不做额外处理。
         for msg in messages:
             # 使用相对时间格式化
             time_str = format_relative_time_for_display(msg.timestamp)
