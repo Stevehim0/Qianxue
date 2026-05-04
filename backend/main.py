@@ -32,8 +32,9 @@ from backend.services.agent.tools.send_message import SendMessageTool
 from backend.services.agent.tools.get_time import GetCurrentTimeTool
 from backend.services.agent.tools.search_memory import SearchMemoryTool
 from backend.services.agent.tools.get_context import GetConversationContextTool
-from backend.services.agent.tools.recognize_image import RecognizeImageTool
 from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
+from backend.services.heartbeat_manager import heartbeat_manager
+from backend.services.voice_service import voice_service
 
 
 # 配置日志
@@ -109,6 +110,10 @@ async def lifespan(app: FastAPI):
     await database.initialize_tables()
     logger.info("数据库初始化完成")
 
+    # 从数据库加载配置覆盖值（sleep、brain 等热更新的配置）
+    await config_manager.load_configs()
+    logger.info("数据库配置覆盖值已加载")
+
     # 创建机器人用户记录
     await _ensure_robot_user()
     logger.info("机器人用户初始化完成")
@@ -143,7 +148,6 @@ async def lifespan(app: FastAPI):
     tool_registry.register(GetCurrentTimeTool())
     tool_registry.register(SearchMemoryTool())
     tool_registry.register(GetConversationContextTool())
-    tool_registry.register(RecognizeImageTool())
     logger.info("AgentBrain 已初始化，工具已注册")
 
     # 初始化核心层
@@ -165,10 +169,19 @@ async def lifespan(app: FastAPI):
     stm_client.base_url = memory_url
     logger.info(f"STM 客户端已初始化: {memory_url}")
 
+    # 初始化语音服务
+    voice_service.reload_config()
+    logger.info(f"语音服务已初始化: FunASR={settings.voice.funasr_websocket_url}, TTS音色={settings.voice.tts_default_voice}")
+
     # 初始化睡眠管理器
     sleep_manager.set_brain(agent_brain)
     asyncio.create_task(run_sleep_cycle())
     logger.info("睡眠周期管理已启动")
+
+    # 初始化内置心跳管理器
+    heartbeat_manager.set_brain(agent_brain)
+    heartbeat_manager.start()
+    logger.info(f"内置心跳管理器已初始化: running={heartbeat_manager.is_running}")
 
     logger.info("应用启动完成")
 
@@ -176,6 +189,8 @@ async def lifespan(app: FastAPI):
 
     # 关闭时执行
     logger.info("正在关闭应用...")
+    heartbeat_manager.stop()
+    await agent_brain.close()
     if isinstance(mem_mod.memory_provider, QianxueMemoryProvider):
         await mem_mod.memory_provider.close()
     from backend.services.stm_client import stm_client
@@ -310,6 +325,9 @@ async def _enqueue_message(key: str, message):
     state = _get_debounce(key)
     state["queue"].append(message)
 
+    # 标记对话活跃，阻止心跳对该群/私聊插嘴
+    agent_brain.mark_conversation_active(key)
+
     # 取消旧计时器，启动新的
     if state["timer"] is not None:
         state["timer"].cancel()
@@ -359,6 +377,9 @@ async def _drain_queue(key: str):
             logger.error(f"AI 处理失败: {e}", exc_info=True)
             _notify_error_async("AI 处理失败", f"消息处理", e)
 
+        # AI 回复完毕，刷新活跃窗口（对方可能继续回复）
+        agent_brain.mark_conversation_active(key)
+
     # AI 回完了，检查期间是否有新消息入队
     if state["queue"] and state["timer"] is None:
         async def _fire_again():
@@ -382,8 +403,8 @@ def _combine_messages(messages: list):
         priority=max(msg.priority for msg in messages),
         is_heartbeat=last.is_heartbeat,
         is_private=last.is_private,
-        has_image=last.has_image,
-        image_description=last.image_description or "",
+        has_image=any(msg.has_image for msg in messages),
+        image_description=next((msg.image_description for msg in messages if msg.image_description), ""),
     )
 
 
@@ -593,22 +614,39 @@ async def _process_private_message(message_data: dict):
 
 @app.post("/api/heartbeat")
 async def heartbeat_trigger():
-    """心跳触发端点。
+    """外部心跳触发端点（向后兼容）。
 
     独立的心跳服务每 N 秒调用一次，只是"叮"一声唤醒主系统。
-    不接受任何参数——主系统自己决定要查什么、要不要说话。
+    内置心跳管理器已接管此功能，此端点保留供外部调用。
     """
     if agent_brain is None:
         return {"status": "error", "reason": "brain_not_initialized"}
 
-    # 睡眠/困倦期间跳过心跳
     if sleep_manager.should_skip_heartbeat:
         return {"status": "skipped", "reason": "sleeping"}
 
-    # 后台执行，不阻塞响应
     asyncio.create_task(_proactive_think())
-
     return {"status": "ok"}
+
+
+@app.get("/api/heartbeat/status")
+async def heartbeat_status():
+    """查询内置心跳状态。"""
+    return heartbeat_manager.get_status()
+
+
+@app.post("/api/heartbeat/start")
+async def heartbeat_start():
+    """启动内置心跳。"""
+    heartbeat_manager.restart()
+    return {"status": "ok", "running": heartbeat_manager.is_running}
+
+
+@app.post("/api/heartbeat/stop")
+async def heartbeat_stop():
+    """停止内置心跳。"""
+    heartbeat_manager.stop()
+    return {"status": "ok", "running": False}
 
 
 async def _proactive_think():
