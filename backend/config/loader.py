@@ -142,6 +142,18 @@ class VisionConfig:
 
 
 @dataclass
+class VoiceConfig:
+    funasr_websocket_url: str = "ws://localhost:10095"
+    funasr_timeout: int = 30
+    tts_default_voice: str = "zh-CN-XiaoxiaoNeural"
+    tts_timeout: int = 30
+    tts_rate: str = "+0%"
+    tts_volume: str = "+0%"
+    audio_target_sample_rate: int = 16000
+    audio_target_channels: int = 1
+
+
+@dataclass
 class ContextConfig:
     group_context_limit: int = 50
     group_context_time_window: int = 30
@@ -158,20 +170,21 @@ class Settings:
     napcat: NapCatConfig = field(default_factory=NapCatConfig)
     admin: AdminConfig = field(default_factory=AdminConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
     context: ContextConfig = field(default_factory=ContextConfig)
 
     _SECTION_FIELDS: Dict[str, type] = None  # type: ignore
 
     @classmethod
     def section_names(cls) -> List[str]:
-        return ["llm", "server", "memory", "brain", "sleep", "napcat", "admin", "vision", "context"]
+        return ["llm", "server", "memory", "brain", "sleep", "napcat", "admin", "vision", "voice", "context"]
 
     @classmethod
     def section_dc_class(cls, section: str) -> type:
         mapping = {
             "llm": LLMConfig, "server": ServerConfig, "memory": MemoryConfig,
             "brain": BrainConfig, "sleep": SleepConfig, "napcat": NapCatConfig,
-            "admin": AdminConfig, "vision": VisionConfig, "context": ContextConfig,
+            "admin": AdminConfig, "vision": VisionConfig, "voice": VoiceConfig, "context": ContextConfig,
         }
         return mapping.get(section)
 
@@ -286,6 +299,7 @@ class ConfigLoader:
             napcat=self._build_napcat(),
             admin=self._build_admin(),
             vision=self._build_vision(),
+            voice=self._build_voice(),
             context=self._build_context(),
         )
 
@@ -407,6 +421,22 @@ class ConfigLoader:
             image_download_timeout=img.get("timeout", 15.0),
         )
 
+    def _build_voice(self) -> VoiceConfig:
+        r = self._raw.get("voice", {})
+        funasr = r.get("funasr", {})
+        tts = r.get("tts", {})
+        audio = r.get("audio", {})
+        return VoiceConfig(
+            funasr_websocket_url=funasr.get("websocket_url", "ws://localhost:10095"),
+            funasr_timeout=funasr.get("timeout", 30),
+            tts_default_voice=tts.get("default_voice", "zh-CN-XiaoxiaoNeural"),
+            tts_timeout=tts.get("timeout", 30),
+            tts_rate=tts.get("rate", "+0%"),
+            tts_volume=tts.get("volume", "+0%"),
+            audio_target_sample_rate=audio.get("target_sample_rate", 16000),
+            audio_target_channels=audio.get("target_channels", 1),
+        )
+
     def _build_context(self) -> ContextConfig:
         r = self._raw.get("context", {})
         gc = r.get("group_context", {})
@@ -445,6 +475,85 @@ def save_thinking_provider(api_key: str, base_url: str, model: str):
     )
 
     logger.info(f"Thinking provider persisted to llm.yaml: {base_url} / {model}")
+
+
+def _mask_api_key(api_key: str) -> str:
+    """脱敏 API Key。"""
+    if not api_key or len(api_key) <= 8:
+        return "*" * len(api_key) if api_key else ""
+    return api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
+
+
+def list_thinking_profiles() -> dict:
+    """列出所有已保存的思考模型配置。"""
+    config_dir = Path(__file__).parent
+    llm_path = config_dir / "llm.yaml"
+    try:
+        with open(llm_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {"profiles": {}}
+
+    profiles = data.get("thinking_profiles", {})
+    # 脱敏 key
+    masked = {}
+    for name, cfg in profiles.items():
+        masked[name] = {
+            "api_key": _mask_api_key(cfg.get("api_key", "")),
+            "base_url": cfg.get("base_url", ""),
+            "model": cfg.get("model", ""),
+        }
+    return {"profiles": masked}
+
+
+def save_thinking_profile(name: str, api_key: str, base_url: str, model: str):
+    """保存一个命名的思考模型配置到 llm.yaml。"""
+    config_dir = Path(__file__).parent
+    llm_path = config_dir / "llm.yaml"
+
+    with open(llm_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    profiles = data.setdefault("thinking_profiles", {})
+    profiles[name] = {
+        "api_key": api_key,
+        "base_url": base_url,
+        "model": model,
+    }
+
+    with open(llm_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+
+    logger.info(f"Thinking profile '{name}' saved: {base_url} / {model}")
+
+
+def delete_thinking_profile(name: str):
+    """删除一个命名的思考模型配置。"""
+    config_dir = Path(__file__).parent
+    llm_path = config_dir / "llm.yaml"
+
+    with open(llm_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    profiles = data.get("thinking_profiles", {})
+    if name in profiles:
+        del profiles[name]
+        with open(llm_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+        logger.info(f"Thinking profile '{name}' deleted")
+
+
+def load_thinking_profile_raw(name: str) -> dict | None:
+    """读取一个 profile 的原始数据（不脱敏，供激活时使用）。"""
+    config_dir = Path(__file__).parent
+    llm_path = config_dir / "llm.yaml"
+    try:
+        with open(llm_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return None
+    profiles = data.get("thinking_profiles", {})
+    return profiles.get(name)
 
 
 settings: Settings = load_settings()

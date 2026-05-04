@@ -32,6 +32,7 @@ class ConfigManager:
         self._context_window: int = settings.context.group_context_limit
         self._debounce_seconds: int = 10
         self._vision_config: Optional[Dict] = None
+        self._voice_config: Optional[Dict] = None
         # 通用 section 覆盖值: section_name -> dict
         self._section_overrides: Dict[str, Dict] = {}
 
@@ -106,6 +107,18 @@ class ConfigManager:
                 self._vision_config = json.loads(row[0])
             except Exception as e:
                 logger.error(f"加载Vision配置失败: {e}")
+
+        # 加载Voice配置（数据库覆盖YAML默认值）
+        cursor = await conn.execute(
+            "SELECT value FROM configs WHERE key = ?",
+            ("voice",)
+        )
+        row = await cursor.fetchone()
+        if row:
+            try:
+                self._voice_config = json.loads(row[0])
+            except Exception as e:
+                logger.error(f"加载Voice配置失败: {e}")
 
         # 加载通用 settings section 覆盖值
         for section in settings.section_names():
@@ -214,6 +227,22 @@ class ConfigManager:
         }
         if self._vision_config:
             base.update(self._vision_config)
+        return base
+
+    def get_voice_config(self) -> Dict[str, any]:
+        """获取Voice配置（数据库覆盖 > YAML 默认值）"""
+        base = {
+            "funasr_websocket_url": settings.voice.funasr_websocket_url,
+            "funasr_timeout": settings.voice.funasr_timeout,
+            "tts_default_voice": settings.voice.tts_default_voice,
+            "tts_timeout": settings.voice.tts_timeout,
+            "tts_rate": settings.voice.tts_rate,
+            "tts_volume": settings.voice.tts_volume,
+            "audio_target_sample_rate": settings.voice.audio_target_sample_rate,
+            "audio_target_channels": settings.voice.audio_target_channels,
+        }
+        if self._voice_config:
+            base.update(self._voice_config)
         return base
 
     def get_all_settings(self) -> Dict[str, Dict]:
