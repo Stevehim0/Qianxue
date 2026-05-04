@@ -33,6 +33,11 @@ class AgentMessage(BaseModel):
     image_type: str = Field(default="无图片", description="图片类型: 表情包/普通图片")
     image_description: Optional[str] = Field(default=None, description="图片描述(已识别)")
 
+    # 语音信息
+    has_voice: bool = Field(default=False, description="是否包含语音")
+    voice_url: Optional[str] = Field(default=None, description="语音文件URL")
+    voice_transcription: Optional[str] = Field(default=None, description="语音转写文本")
+
     # 时间戳
     timestamp: datetime = Field(default_factory=datetime.now)
 
