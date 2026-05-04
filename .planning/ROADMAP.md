@@ -47,7 +47,7 @@
 **Milestone Goal:** 千雪能接收语音消息(ASR转写)和发送语音回复(TTS合成)，并通过Discord平台支持语音频道实时交互
 
 - [x] **Phase 16: VoiceService 基础服务** - 语音ASR/TTS核心服务，含配置和音频格式处理 (completed 2026-05-04)
-- [ ] **Phase 17: AgentMessage 语音扩展** - 消息模型增加语音字段，Brain处理语音转写展示
+- [x] **Phase 17: AgentMessage 语音扩展** - 消息模型增加语音字段，Brain处理语音转写展示 (completed 2026-05-04)
 - [ ] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由
 - [ ] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理
 - [ ] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制
@@ -77,7 +77,9 @@ Plans:
   1. AgentMessage 包含 has_voice、voice_url、voice_transcription 三个新字段，均有默认值不影响现有代码
   2. 当消息包含语音转写文本时，Brain 的用户消息头显示 "[语音消息转写]" 前缀及转写内容
   3. 现有的纯文字消息处理流程不受任何影响（向后兼容）
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [x] 17-01-PLAN.md -- AgentMessage 语音字段 + Brain 展示 + context_manager 标记 (AGENT-01, AGENT-02)
 
 ### Phase 18: SendVoice 语音回复工具
 **Goal**: AI 可以在思考循环中选择发送语音回复，且仅在有语音能力的平台上生效
@@ -130,8 +132,8 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 16. VoiceService 基础服务 | 1/1 | Complete   | 2026-05-04 |
-| 17. AgentMessage 语音扩展 | 0/? | Not started | - |
+| 16. VoiceService 基础服务 | 1/1 | Complete    | 2026-05-04 |
+| 17. AgentMessage 语音扩展 | 1/1 | Complete   | 2026-05-04 |
 | 18. SendVoice 语音回复工具 | 0/? | Not started | - |
 | 19. Discord 文字与语音消息 | 0/? | Not started | - |
 | 20. Discord 语音频道实时流 | 0/? | Not started | - |

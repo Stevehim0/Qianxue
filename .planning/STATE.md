@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: 实时语音功能
 status: verifying
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-05-04T09:18:58.608Z"
-last_activity: 2026-05-04 -- 16-01-PLAN executed
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-05-04T10:08:20Z"
+last_activity: 2026-05-04 -- Phase 17 Plan 01 complete
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
   percent: 100
 ---
 
@@ -22,10 +22,10 @@ progress:
 
 ## Current Position
 
-Phase: 16 (VoiceService 基础服务) — COMPLETE
-Plan: 1 of 1
-Status: Phase 16 complete — ready for verification
-Last activity: 2026-05-04 -- 16-01-PLAN executed
+Phase: 17 (AgentMessage 语音扩展) — COMPLETE
+Plan: 1/1 (complete)
+Status: Phase 17 complete — all plans executed
+Last activity: 2026-05-04
 
 Progress: [██████████] 100%
 
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 
 **Core value:** 让AI像人类一样拥有记忆 - 不仅是存储和检索，而是主观的、会遗忘的、会做梦的、能联想的记忆体验
 
-**Current focus:** Phase 16 — VoiceService 基础服务
+**Current focus:** Phase 17 — AgentMessage 语音扩展
 
 ## Performance Metrics
 
@@ -49,12 +49,13 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 16. VoiceService 基础服务 | 1/1 | Complete |
-| 17. AgentMessage 语音扩展 | 0/? | Not started |
+| 17. AgentMessage 语音扩展 | 1/1 | Complete    |
 | 18. SendVoice 语音回复工具 | 0/? | Not started |
 | 19. Discord 文字与语音消息 | 0/? | Not started |
 | 20. Discord 语音频道实时流 | 0/? | Not started |
 | 21. 基础设施与启动集成 | 0/? | Not started |
 | Phase 16 P01 | 6min | 3 tasks | 5 files |
+| Phase 17 P01 | 2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,12 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 
 None yet.
 
+### Phase 17 Decisions
+
+- Voice fields follow exact same pattern as image fields (bool + Optional[str])
+- Voice processing branch independent from image branch (both can coexist)
+- context_manager does not need code change — markers passed through in content
+
 ### Phase 16 Decisions
 
 - Default TTS voice: zh-CN-XiaoxiaoNeural (Xiaoxiao) -- warm, natural tone matching Qianxue persona
@@ -96,9 +103,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-04T09:18:58.604Z
-Stopped at: Completed 16-01-PLAN.md
-Resume file: None
+Last session: 2026-05-04T10:08:20Z
+Stopped at: Completed 17-01-PLAN.md
+Resume file: .planning/phases/17-agentmessage/17-01-SUMMARY.md
 
 ---
 *State updated: 2026-05-04 - Roadmap created for v3.0*

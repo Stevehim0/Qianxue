@@ -15,8 +15,8 @@
 
 ### Agent 集成 (Agent Integration)
 
-- [ ] **AGENT-01**: AgentMessage 新增 `has_voice: bool`、`voice_url: Optional[str]`、`voice_transcription: Optional[str]` 字段
-- [ ] **AGENT-02**: Brain 的 `_build_user_message_header` 中处理语音转写，标注 `[语音消息转写]` 并展示内容
+- [x] **AGENT-01**: AgentMessage 新增 `has_voice: bool`、`voice_url: Optional[str]`、`voice_transcription: Optional[str]` 字段
+- [x] **AGENT-02**: Brain 的 `_build_user_message_header` 中处理语音转写，标注 `[语音消息转写]` 并展示内容
 - [ ] **AGENT-03**: send_voice 工具注册到 ToolRegistry，AI 可在思考循环中选择调用
 - [ ] **AGENT-04**: send_voice 工具描述明确告知 AI：仅在 Discord 等支持语音的平台可用
 - [ ] **AGENT-05**: send_voice 工具执行时调用 voice_service.synthesize() 生成音频，通过平台 API 发送
@@ -79,8 +79,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOICE-03 | Phase 16 | Complete |
 | VOICE-04 | Phase 16 | Complete |
 | VOICE-05 | Phase 16 | Complete |
-| AGENT-01 | Phase 17 | Pending |
-| AGENT-02 | Phase 17 | Pending |
+| AGENT-01 | Phase 17 | Complete |
+| AGENT-02 | Phase 17 | Complete |
 | AGENT-03 | Phase 18 | Pending |
 | AGENT-04 | Phase 18 | Pending |
 | AGENT-05 | Phase 18 | Pending |
