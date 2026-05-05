@@ -48,7 +48,7 @@
 
 - [x] **Phase 16: VoiceService 基础服务** - 语音ASR/TTS核心服务，含配置和音频格式处理 (completed 2026-05-04)
 - [x] **Phase 17: AgentMessage 语音扩展** - 消息模型增加语音字段，Brain处理语音转写展示 (completed 2026-05-04)
-- [ ] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由
+- [x] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由 (completed 2026-05-05)
 - [ ] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理
 - [ ] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制
 - [ ] **Phase 21: 基础设施与启动集成** - 配置加载、健康检查、启动脚本、依赖检查
@@ -90,7 +90,9 @@ Plans:
   2. send_voice 工具描述明确告知 AI：仅在 Discord 等支持语音的平台可用
   3. 在 Discord 平台调用 send_voice 时，AI 的文字回复被转为语音并发送给用户
   4. 在不支持语音的平台（如 QQ）调用 send_voice 时，返回错误提示而非崩溃
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [x] 18-01-PLAN.md -- VoicePlayer 单例 + SendVoiceTool + brain 串行执行 + main 注册 (AGENT-03~06)
 
 ### Phase 19: Discord 文字与语音消息
 **Goal**: 千雪可以通过 Discord 文字频道收发消息，并能接收和转写语音附件消息
@@ -133,11 +135,11 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 16. VoiceService 基础服务 | 1/1 | Complete    | 2026-05-04 |
-| 17. AgentMessage 语音扩展 | 1/1 | Complete   | 2026-05-04 |
-| 18. SendVoice 语音回复工具 | 0/? | Not started | - |
+| 17. AgentMessage 语音扩展 | 1/1 | Complete    | 2026-05-04 |
+| 18. SendVoice 语音回复工具 | 1/1 | Complete   | 2026-05-05 |
 | 19. Discord 文字与语音消息 | 0/? | Not started | - |
 | 20. Discord 语音频道实时流 | 0/? | Not started | - |
 | 21. 基础设施与启动集成 | 0/? | Not started | - |
 
 ---
-*Last updated: 2026-05-04*
+*Last updated: 2026-05-06*

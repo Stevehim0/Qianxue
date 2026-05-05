@@ -17,10 +17,10 @@
 
 - [x] **AGENT-01**: AgentMessage 新增 `has_voice: bool`、`voice_url: Optional[str]`、`voice_transcription: Optional[str]` 字段
 - [x] **AGENT-02**: Brain 的 `_build_user_message_header` 中处理语音转写，标注 `[语音消息转写]` 并展示内容
-- [ ] **AGENT-03**: send_voice 工具注册到 ToolRegistry，AI 可在思考循环中选择调用
-- [ ] **AGENT-04**: send_voice 工具描述明确告知 AI：仅在 Discord 等支持语音的平台可用
-- [ ] **AGENT-05**: send_voice 工具执行时调用 voice_service.synthesize() 生成音频，通过平台 API 发送
-- [ ] **AGENT-06**: send_voice 工具在不受支持的平台（如 QQ）返回错误提示
+- [x] **AGENT-03**: send_voice 工具注册到 ToolRegistry，AI 可在思考循环中选择调用
+- [x] **AGENT-04**: send_voice 工具描述明确告知 AI：仅在 Discord 等支持语音的平台可用
+- [x] **AGENT-05**: send_voice 工具执行时调用 voice_service.synthesize() 生成音频，通过平台 API 发送
+- [x] **AGENT-06**: send_voice 工具在不受支持的平台（如 QQ）返回错误提示
 
 ### Discord 平台 (Discord)
 
@@ -81,10 +81,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOICE-05 | Phase 16 | Complete |
 | AGENT-01 | Phase 17 | Complete |
 | AGENT-02 | Phase 17 | Complete |
-| AGENT-03 | Phase 18 | Pending |
-| AGENT-04 | Phase 18 | Pending |
-| AGENT-05 | Phase 18 | Pending |
-| AGENT-06 | Phase 18 | Pending |
+| AGENT-03 | Phase 18 | Complete |
+| AGENT-04 | Phase 18 | Complete |
+| AGENT-05 | Phase 18 | Complete |
+| AGENT-06 | Phase 18 | Complete |
 | DISC-01 | Phase 19 | Pending |
 | DISC-02 | Phase 19 | Pending |
 | DISC-03 | Phase 19 | Pending |
