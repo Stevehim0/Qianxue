@@ -32,9 +32,11 @@ from backend.services.agent.tools.send_message import SendMessageTool
 from backend.services.agent.tools.get_time import GetCurrentTimeTool
 from backend.services.agent.tools.search_memory import SearchMemoryTool
 from backend.services.agent.tools.get_context import GetConversationContextTool
+from backend.services.agent.tools.send_voice import SendVoiceTool
 from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
 from backend.services.heartbeat_manager import heartbeat_manager
 from backend.services.voice_service import voice_service
+from backend.services.voice_player import voice_player
 
 
 # 配置日志
@@ -148,6 +150,7 @@ async def lifespan(app: FastAPI):
     tool_registry.register(GetCurrentTimeTool())
     tool_registry.register(SearchMemoryTool())
     tool_registry.register(GetConversationContextTool())
+    tool_registry.register(SendVoiceTool())
     logger.info("AgentBrain 已初始化，工具已注册")
 
     # 初始化核心层
@@ -172,6 +175,9 @@ async def lifespan(app: FastAPI):
     # 初始化语音服务
     voice_service.reload_config()
     logger.info(f"语音服务已初始化: FunASR={settings.voice.funasr_websocket_url}, TTS音色={settings.voice.tts_default_voice}")
+
+    # 初始化语音播放器（Phase 18 框架，Phase 20 接入 Discord）
+    logger.info(f"语音播放器已初始化: connected={voice_player.is_connected()}")
 
     # 初始化睡眠管理器
     sleep_manager.set_brain(agent_brain)

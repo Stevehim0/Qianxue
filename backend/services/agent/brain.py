@@ -660,13 +660,13 @@ class AgentBrain:
     ) -> Dict[str, Any]:
         """执行工具调用。
 
-        send_message 按顺序串行（保证消息顺序），其余工具并行。
+        send_message 和 send_voice 按顺序串行（保证消息/语音顺序），其余工具并行。
         """
         results = {}
 
-        # 分离 send_message 和其他工具
-        send_msgs = [tc for tc in tool_calls if tc.tool_name == "send_message"]
-        others = [tc for tc in tool_calls if tc.tool_name != "send_message"]
+        # 分离 send_message/send_voice 和其他工具
+        send_msgs = [tc for tc in tool_calls if tc.tool_name in ("send_message", "send_voice")]
+        others = [tc for tc in tool_calls if tc.tool_name not in ("send_message", "send_voice")]
 
         # 其他工具并行执行
         if others:
@@ -677,7 +677,7 @@ class AgentBrain:
             for tc, result in zip(others, other_results):
                 results[tc.tool_id] = result
 
-        # send_message 串行执行（保证消息顺序）
+        # send_message/send_voice 串行执行（保证消息/语音顺序）
         for tc in send_msgs:
             result = await self._execute_single_tool(tc, message, previous_results)
             results[tc.tool_id] = result
