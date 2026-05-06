@@ -33,6 +33,8 @@ from backend.services.agent.tools.get_time import GetCurrentTimeTool
 from backend.services.agent.tools.search_memory import SearchMemoryTool
 from backend.services.agent.tools.get_context import GetConversationContextTool
 from backend.services.agent.tools.send_voice import SendVoiceTool
+from backend.services.agent.tools.connect_discord import ConnectDiscordTool
+from backend.services.agent.tools.disconnect_discord import DisconnectDiscordTool
 from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
 from backend.services.heartbeat_manager import heartbeat_manager
 from backend.services.voice_service import voice_service
@@ -151,6 +153,8 @@ async def lifespan(app: FastAPI):
     tool_registry.register(SearchMemoryTool())
     tool_registry.register(GetConversationContextTool())
     tool_registry.register(SendVoiceTool())
+    tool_registry.register(ConnectDiscordTool())
+    tool_registry.register(DisconnectDiscordTool())
     logger.info("AgentBrain 已初始化，工具已注册")
 
     # 初始化核心层
@@ -179,6 +183,45 @@ async def lifespan(app: FastAPI):
     # 初始化语音播放器（Phase 18 框架，Phase 20 接入 Discord）
     logger.info(f"语音播放器已初始化: connected={voice_player.is_connected()}")
 
+    # 初始化 Discord 消息源
+    import backend.services.agent.sources.discord_source as ds_module
+    ds_module.discord_source = ds_module.DiscordSource()
+    logger.info(f"Discord 消息源已初始化: channels={settings.discord.channels}, dm_enabled={settings.discord.dm_enabled}")
+
+    # Wire DiscordSource 消息处理器到对话管道
+    async def _discord_message_handler(msg):
+        """Discord 消息进入对话处理管道（与 QQ 消息相同流程）."""
+        # 更新记忆系统昵称映射
+        if isinstance(mem_mod.memory_provider, QianxueMemoryProvider):
+            mem_mod.memory_provider.update_nickname_map(msg.user_id, msg.sender_nickname)
+        # 存入上下文
+        await context_manager.add_group_message(
+            group_id=msg.group_id,
+            user_id=msg.user_id,
+            role="user",
+            content=msg.content,
+            sender_nickname=msg.sender_nickname,
+            mentions=msg.mentions,
+            is_directed_at_bot=msg.is_mentioned
+        )
+        # 记忆提取（fire-and-forget）
+        source_type = "discord_private" if msg.is_private else "discord_channel"
+        asyncio.create_task(_extract_memory(msg.group_id, msg.user_id, msg.content, source_type=source_type))
+        # STM 事件
+        _record_stm_event(
+            event_type="user_mention" if msg.is_mentioned else "significant_msg",
+            source_type=source_type,
+            group_id=msg.group_id,
+            user_id=msg.user_id,
+            summary=f"{'@你' if msg.is_mentioned else '说'}: {msg.content[:50]}",
+            importance=settings.brain.stm_importance_user_mention if msg.is_mentioned else settings.brain.stm_importance_significant_msg,
+        )
+        # Debounce 队列
+        await _enqueue_message(msg.group_id, msg)
+
+    ds_module.discord_source.set_message_handler(_discord_message_handler)
+    logger.info("Discord 消息处理器已接线")
+
     # 初始化睡眠管理器
     sleep_manager.set_brain(agent_brain)
     asyncio.create_task(run_sleep_cycle())
@@ -195,6 +238,12 @@ async def lifespan(app: FastAPI):
 
     # 关闭时执行
     logger.info("正在关闭应用...")
+
+    # 断开 Discord 连接
+    if ds_module.discord_source and ds_module.discord_source.is_connected():
+        await ds_module.discord_source.disconnect()
+        logger.info("Discord 已断开")
+
     heartbeat_manager.stop()
     await agent_brain.close()
     if isinstance(mem_mod.memory_provider, QianxueMemoryProvider):
