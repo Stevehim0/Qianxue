@@ -222,6 +222,10 @@ async def lifespan(app: FastAPI):
     ds_module.discord_source.set_message_handler(_discord_message_handler)
     logger.info("Discord 消息处理器已接线")
 
+    # 接线 VoicePlayer 消息处理器（语音段转写后进入对话流程）
+    voice_player.set_message_handler(_discord_message_handler)
+    logger.info("VoicePlayer 消息处理器已接线")
+
     # 初始化睡眠管理器
     sleep_manager.set_brain(agent_brain)
     asyncio.create_task(run_sleep_cycle())
