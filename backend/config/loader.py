@@ -165,6 +165,7 @@ class DiscordConfig:
     channels: List[int] = field(default_factory=list)
     dm_enabled: bool = True
     connect_timeout: int = 30
+    voice_channel_id: Optional[int] = None
     voice: DiscordVoiceConfig = field(default_factory=DiscordVoiceConfig)
 
 
@@ -463,6 +464,7 @@ class ConfigLoader:
             channels=r.get("channels", []),
             dm_enabled=r.get("dm_enabled", True),
             connect_timeout=r.get("connect_timeout", 30),
+            voice_channel_id=r.get("voice_channel_id", None),
             voice=DiscordVoiceConfig(
                 max_size=v.get("max_size", 26214400),
                 auto_transcribe=v.get("auto_transcribe", True),
