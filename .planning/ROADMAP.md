@@ -50,7 +50,7 @@
 - [x] **Phase 17: AgentMessage 语音扩展** - 消息模型增加语音字段，Brain处理语音转写展示 (completed 2026-05-04)
 - [x] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由 (completed 2026-05-05)
 - [x] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理 (completed 2026-05-06)
-- [ ] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制
+- [x] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制 (completed 2026-05-06)
 - [ ] **Phase 21: 基础设施与启动集成** - 配置加载、健康检查、启动脚本、依赖检查
 
 ## Phase Details
@@ -141,7 +141,7 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 | 17. AgentMessage 语音扩展 | 1/1 | Complete    | 2026-05-04 |
 | 18. SendVoice 语音回复工具 | 1/1 | Complete    | 2026-05-05 |
 | 19. Discord 文字与语音消息 | 2/2 | Complete   | 2026-05-06 |
-| 20. Discord 语音频道实时流 | 0/? | Not started | - |
+| 20. Discord 语音频道实时流 | 2/1 | Complete   | 2026-05-06 |
 | 21. 基础设施与启动集成 | 0/? | Not started | - |
 
 ---
