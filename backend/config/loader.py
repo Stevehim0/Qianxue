@@ -154,6 +154,21 @@ class VoiceConfig:
 
 
 @dataclass
+class DiscordVoiceConfig:
+    max_size: int = 26214400  # 25MB
+    auto_transcribe: bool = True
+
+
+@dataclass
+class DiscordConfig:
+    token: str = ""
+    channels: List[int] = field(default_factory=list)
+    dm_enabled: bool = True
+    connect_timeout: int = 30
+    voice: DiscordVoiceConfig = field(default_factory=DiscordVoiceConfig)
+
+
+@dataclass
 class ContextConfig:
     group_context_limit: int = 50
     group_context_time_window: int = 30
@@ -171,20 +186,22 @@ class Settings:
     admin: AdminConfig = field(default_factory=AdminConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
+    discord: DiscordConfig = field(default_factory=DiscordConfig)
     context: ContextConfig = field(default_factory=ContextConfig)
 
     _SECTION_FIELDS: Dict[str, type] = None  # type: ignore
 
     @classmethod
     def section_names(cls) -> List[str]:
-        return ["llm", "server", "memory", "brain", "sleep", "napcat", "admin", "vision", "voice", "context"]
+        return ["llm", "server", "memory", "brain", "sleep", "napcat", "admin", "vision", "voice", "discord", "context"]
 
     @classmethod
     def section_dc_class(cls, section: str) -> type:
         mapping = {
             "llm": LLMConfig, "server": ServerConfig, "memory": MemoryConfig,
             "brain": BrainConfig, "sleep": SleepConfig, "napcat": NapCatConfig,
-            "admin": AdminConfig, "vision": VisionConfig, "voice": VoiceConfig, "context": ContextConfig,
+            "admin": AdminConfig, "vision": VisionConfig, "voice": VoiceConfig,
+            "discord": DiscordConfig, "context": ContextConfig,
         }
         return mapping.get(section)
 
@@ -300,6 +317,7 @@ class ConfigLoader:
             admin=self._build_admin(),
             vision=self._build_vision(),
             voice=self._build_voice(),
+            discord=self._build_discord(),
             context=self._build_context(),
         )
 
@@ -435,6 +453,20 @@ class ConfigLoader:
             tts_volume=tts.get("volume", "+0%"),
             audio_target_sample_rate=audio.get("target_sample_rate", 16000),
             audio_target_channels=audio.get("target_channels", 1),
+        )
+
+    def _build_discord(self) -> DiscordConfig:
+        r = self._raw.get("discord", {})
+        v = r.get("voice", {})
+        return DiscordConfig(
+            token=r.get("token", ""),
+            channels=r.get("channels", []),
+            dm_enabled=r.get("dm_enabled", True),
+            connect_timeout=r.get("connect_timeout", 30),
+            voice=DiscordVoiceConfig(
+                max_size=v.get("max_size", 26214400),
+                auto_transcribe=v.get("auto_transcribe", True),
+            ),
         )
 
     def _build_context(self) -> ContextConfig:
