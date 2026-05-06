@@ -19,6 +19,7 @@ from discord.ext import commands
 from backend.config.loader import settings
 from backend.services.agent.message import AgentMessage
 from backend.services.voice_service import voice_service, VoiceError
+from backend.services.voice_player import voice_player
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,10 @@ class DiscordSource:
 
     async def disconnect(self) -> None:
         """断开 Discord 连接。"""
+        # 先断开语音频道（per 20-02: 语音频道同步断开）
+        if voice_player.is_connected():
+            await voice_player.disconnect()
+
         if self._bot and not self._bot.is_closed():
             await self._bot.close()
         if self._task:
@@ -112,6 +117,18 @@ class DiscordSource:
         @self._bot.event
         async def on_ready():
             logger.info(f"Discord Bot 已就绪: {self._bot.user}")
+            # 注入 Bot 实例到 VoicePlayer（per 20-02: 语音频道集成）
+            voice_player.set_bot(self._bot)
+            # 如果配置了语音频道 ID，自动加入
+            if settings.discord.voice_channel_id:
+                try:
+                    success = await voice_player.connect(str(settings.discord.voice_channel_id))
+                    if success:
+                        logger.info(f"已自动加入语音频道: {settings.discord.voice_channel_id}")
+                    else:
+                        logger.warning(f"自动加入语音频道失败: {settings.discord.voice_channel_id}")
+                except Exception as e:
+                    logger.warning(f"自动加入语音频道异常: {e}")
 
     # ------------------------------------------------------------------
     # 消息处理
