@@ -105,7 +105,7 @@ Plans:
   4. Discord Bot token 和服务器配置可管理，不在代码中硬编码
 **Plans**: 2 plans
 Plans:
-- [ ] 19-01-PLAN.md -- Discord config + DiscordSource message source (DISC-01~03, INFRA-05)
+- [x] 19-01-PLAN.md -- Discord config + DiscordSource message source (DISC-01~03, INFRA-05)
 - [ ] 19-02-PLAN.md -- connect/disconnect tools + send_message routing + main.py init (DISC-01, DISC-02)
 
 ### Phase 20: Discord 语音频道实时流
@@ -140,7 +140,7 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 | 16. VoiceService 基础服务 | 1/1 | Complete    | 2026-05-04 |
 | 17. AgentMessage 语音扩展 | 1/1 | Complete    | 2026-05-04 |
 | 18. SendVoice 语音回复工具 | 1/1 | Complete    | 2026-05-05 |
-| 19. Discord 文字与语音消息 | 0/2 | Not started | - |
+| 19. Discord 文字与语音消息 | 1/2 | In Progress|  |
 | 20. Discord 语音频道实时流 | 0/? | Not started | - |
 | 21. 基础设施与启动集成 | 0/? | Not started | - |
 

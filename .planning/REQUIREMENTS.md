@@ -24,9 +24,9 @@
 
 ### Discord 平台 (Discord)
 
-- [ ] **DISC-01**: Discord Bot 客户端（discord.py）连接并监听 Discord 服务器的文字和语音频道
-- [ ] **DISC-02**: DiscordSource 将 Discord 文字消息转换为 AgentMessage 格式（类似 QQSource）
-- [ ] **DISC-03**: DiscordSource 检测语音附件消息，调用 voice_service.transcribe() 转写后填入 AgentMessage
+- [x] **DISC-01**: Discord Bot 客户端（discord.py）连接并监听 Discord 服务器的文字和语音频道
+- [x] **DISC-02**: DiscordSource 将 Discord 文字消息转换为 AgentMessage 格式（类似 QQSource）
+- [x] **DISC-03**: DiscordSource 检测语音附件消息，调用 voice_service.transcribe() 转写后填入 AgentMessage
 - [ ] **DISC-04**: Discord Bot 能加入语音频道并实时播放 TTS 生成的音频
 - [ ] **DISC-05**: Discord 语音频道支持接收用户语音流，通过 FunASR 转写后进入对话流程
 - [ ] **DISC-06**: 语音频道实时流支持打断机制（用户说话时停止当前 TTS 播放）
@@ -37,7 +37,7 @@
 - [ ] **INFRA-02**: FunASR Server 健康检查端点（backend 启动时验证连接）
 - [ ] **INFRA-03**: start_all.py 集成 FunASR Server 启动逻辑
 - [ ] **INFRA-04**: FFmpeg 和 Opus 库可用性检查（Discord 语音必需）
-- [ ] **INFRA-05**: Discord Bot token 和配置管理
+- [x] **INFRA-05**: Discord Bot token 和配置管理
 
 ## v3.1 Requirements (Deferred)
 
@@ -85,9 +85,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGENT-04 | Phase 18 | Complete |
 | AGENT-05 | Phase 18 | Complete |
 | AGENT-06 | Phase 18 | Complete |
-| DISC-01 | Phase 19 | Pending |
-| DISC-02 | Phase 19 | Pending |
-| DISC-03 | Phase 19 | Pending |
+| DISC-01 | Phase 19 | Complete |
+| DISC-02 | Phase 19 | Complete |
+| DISC-03 | Phase 19 | Complete |
 | DISC-04 | Phase 20 | Pending |
 | DISC-05 | Phase 20 | Pending |
 | DISC-06 | Phase 20 | Pending |
@@ -95,7 +95,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-02 | Phase 21 | Pending |
 | INFRA-03 | Phase 21 | Pending |
 | INFRA-04 | Phase 21 | Pending |
-| INFRA-05 | Phase 19 | Pending |
+| INFRA-05 | Phase 19 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 22 total
