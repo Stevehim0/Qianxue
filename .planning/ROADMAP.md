@@ -49,7 +49,7 @@
 - [x] **Phase 16: VoiceService 基础服务** - 语音ASR/TTS核心服务，含配置和音频格式处理 (completed 2026-05-04)
 - [x] **Phase 17: AgentMessage 语音扩展** - 消息模型增加语音字段，Brain处理语音转写展示 (completed 2026-05-04)
 - [x] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由 (completed 2026-05-05)
-- [ ] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理
+- [x] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理 (completed 2026-05-06)
 - [ ] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制
 - [ ] **Phase 21: 基础设施与启动集成** - 配置加载、健康检查、启动脚本、依赖检查
 
@@ -106,7 +106,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 19-01-PLAN.md -- Discord config + DiscordSource message source (DISC-01~03, INFRA-05)
-- [ ] 19-02-PLAN.md -- connect/disconnect tools + send_message routing + main.py init (DISC-01, DISC-02)
+- [x] 19-02-PLAN.md -- connect/disconnect tools + send_message routing + main.py init (DISC-01, DISC-02)
 
 ### Phase 20: Discord 语音频道实时流
 **Goal**: 千雪可以加入 Discord 语音频道，实时播放 TTS 音频并接收用户语音流
@@ -140,7 +140,7 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 | 16. VoiceService 基础服务 | 1/1 | Complete    | 2026-05-04 |
 | 17. AgentMessage 语音扩展 | 1/1 | Complete    | 2026-05-04 |
 | 18. SendVoice 语音回复工具 | 1/1 | Complete    | 2026-05-05 |
-| 19. Discord 文字与语音消息 | 1/2 | In Progress|  |
+| 19. Discord 文字与语音消息 | 2/2 | Complete   | 2026-05-06 |
 | 20. Discord 语音频道实时流 | 0/? | Not started | - |
 | 21. 基础设施与启动集成 | 0/? | Not started | - |
 

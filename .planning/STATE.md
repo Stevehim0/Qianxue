@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: 实时语音功能
-status: executing
-stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-05-07T01:09:00Z"
+status: verifying
+stopped_at: Completed 19-02-PLAN.md
+last_updated: "2026-05-07T01:13:00Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 100
 ---
 
@@ -22,9 +22,9 @@ progress:
 
 ## Current Position
 
-Phase: 19 (discord) — EXECUTING
+Phase: 19 (discord) — COMPLETE
 Plan: 2 of 2
-Status: Plan 01 complete, ready for Plan 02
+Status: Phase complete — ready for verification
 Last activity: 2026-05-07
 
 Progress: [██████████] 100%
@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 **Velocity:**
 
 - Total plans completed (v2.0): 75+
-- v3.0 plans completed: 4
+- v3.0 plans completed: 5
 
 **By Phase:**
 
@@ -51,13 +51,14 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 | 16. VoiceService 基础服务 | 1/1 | Complete |
 | 17. AgentMessage 语音扩展 | 1/1 | Complete    |
 | 18. SendVoice 语音回复工具 | 1/1 | Complete |
-| 19. Discord 文字与语音消息 | 1/? | Executing |
+| 19. Discord 文字与语音消息 | 2/2 | Complete |
 | 20. Discord 语音频道实时流 | 0/? | Not started |
 | 21. 基础设施与启动集成 | 0/? | Not started |
 | Phase 16 P01 | 6min | 3 tasks | 5 files |
 | Phase 17 P01 | 2min | 3 tasks | 3 files |
 | Phase 18 P01 | 3min | 2 tasks | 4 files |
 | Phase 19 P01 | 5min | 2 tasks | 3 files |
+| Phase 19-discord P02 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ None yet.
 - Bot 实例不可重用：每次 connect() 创建新 Bot，disconnect() 销毁 (RISK-02)
 - DM group_id 使用 dm_ 前缀格式，fetch_user 替代 get_user 处理未缓存用户 (RISK-04)
 - send_voice_file 方法为 Phase 18 预留发送通道，实际使用在 Phase 20
+- Discord 路由使用 dm_ 前缀 + context source 双重检测，Discord 优先于 QQ 路由 (Plan 02)
+- Discord 消息处理器复用 QQ 管道（context/memory/STM/debounce/brain），user_id=robot (Plan 02)
 
 ### Phase 18 Decisions
 
@@ -119,9 +122,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-07T01:09:00Z
-Stopped at: Completed 19-01-PLAN.md
-Resume file: .planning/phases/19-discord/19-01-SUMMARY.md
+Last session: 2026-05-07T01:13:00Z
+Stopped at: Completed 19-02-PLAN.md
+Resume file: .planning/phases/19-discord/19-02-SUMMARY.md
 
 ---
-*State updated: 2026-05-07 - Phase 19 Plan 01 complete*
+*State updated: 2026-05-07 - Phase 19 Plan 02 complete*

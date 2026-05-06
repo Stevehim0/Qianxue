@@ -27,9 +27,9 @@
 - [x] **DISC-01**: Discord Bot 客户端（discord.py）连接并监听 Discord 服务器的文字和语音频道
 - [x] **DISC-02**: DiscordSource 将 Discord 文字消息转换为 AgentMessage 格式（类似 QQSource）
 - [x] **DISC-03**: DiscordSource 检测语音附件消息，调用 voice_service.transcribe() 转写后填入 AgentMessage
-- [ ] **DISC-04**: Discord Bot 能加入语音频道并实时播放 TTS 生成的音频
-- [ ] **DISC-05**: Discord 语音频道支持接收用户语音流，通过 FunASR 转写后进入对话流程
-- [ ] **DISC-06**: 语音频道实时流支持打断机制（用户说话时停止当前 TTS 播放）
+- [x] **DISC-04**: Discord Bot 能加入语音频道并实时播放 TTS 生成的音频
+- [x] **DISC-05**: Discord 语音频道支持接收用户语音流，通过 FunASR 转写后进入对话流程
+- [x] **DISC-06**: 语音频道实时流支持打断机制（用户说话时停止当前 TTS 播放）
 
 ### 基础设施 (Infrastructure)
 
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-01 | Phase 19 | Complete |
 | DISC-02 | Phase 19 | Complete |
 | DISC-03 | Phase 19 | Complete |
-| DISC-04 | Phase 20 | Pending |
-| DISC-05 | Phase 20 | Pending |
-| DISC-06 | Phase 20 | Pending |
+| DISC-04 | Phase 20 | Complete |
+| DISC-05 | Phase 20 | Complete |
+| DISC-06 | Phase 20 | Complete |
 | INFRA-01 | Phase 21 | Pending |
 | INFRA-02 | Phase 21 | Pending |
 | INFRA-03 | Phase 21 | Pending |
