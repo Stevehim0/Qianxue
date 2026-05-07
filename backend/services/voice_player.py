@@ -17,7 +17,12 @@ import time
 import wave
 from typing import Awaitable, Callable, List, Optional
 
-import discord
+try:
+    import discord
+    _DISCORD_AVAILABLE = True
+except ImportError:
+    discord = None  # type: ignore[assignment]
+    _DISCORD_AVAILABLE = False
 
 from backend.config.loader import settings
 from backend.services.agent.message import AgentMessage
@@ -250,6 +255,9 @@ class VoicePlayer:
         if not self._bot or not self._bot.is_ready():
             logger.warning("VoicePlayer.connect: Bot 未就绪")
             return False
+
+        if not _DISCORD_AVAILABLE:
+            raise RuntimeError("discord.py 未安装。请运行: pip install discord.py")
 
         # 2. 检查 libopus
         if not discord.opus.is_loaded():

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 async def check_funasr(url: str, timeout: float = 5.0) -> Tuple[bool, str]:
     """检查 FunASR WebSocket 连接可用性 (D-07)."""
     try:
-        async with websockets.connect(url, timeout=timeout):
+        async with await asyncio.wait_for(websockets.connect(url), timeout=timeout):
             return (True, "OK")
     except Exception as e:
         return (False, f"不可用: {url} ({e})")
@@ -98,7 +98,10 @@ async def check_edge_tts(voice: str, timeout: float = 10.0) -> Tuple[bool, str]:
 
 def check_voice_recv() -> Tuple[bool, str]:
     """检查 discord-ext-voice-recv 包可用性 (D-11)."""
-    spec = importlib.util.find_spec("discord.ext.voice_recv")
+    try:
+        spec = importlib.util.find_spec("discord.ext.voice_recv")
+    except ModuleNotFoundError:
+        return (False, "未安装。请运行: pip install discord.py discord-ext-voice-recv")
     if spec is not None:
         return (True, "OK")
     return (False, "未安装。请运行: pip install discord-ext-voice-recv")

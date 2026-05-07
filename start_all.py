@@ -79,12 +79,16 @@ async def run_service(svc: dict):
         # limit restart attempts
         for attempt in range(3):
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
-            proc = await asyncio.create_subprocess_exec(
-                *svc["cmd"],
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=env,
-            )
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *svc["cmd"],
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                    env=env,
+                )
+            except FileNotFoundError:
+                print(f"{tag(svc)} {svc['name']} 启动失败: 找不到命令 '{svc['cmd'][0]}'，跳过此服务")
+                return
             processes[svc["tag"]] = proc
             print(f"{tag(svc)} {svc['name']} started (PID {proc.pid})")
             try:

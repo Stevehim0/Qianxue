@@ -11,10 +11,16 @@ Bot 实例不可重用（RISK-02）：每次 connect() 创建新 Bot，disconnec
 import asyncio
 import io
 import logging
-from typing import Optional, Callable, Awaitable
+from typing import Optional, Callable, Awaitable, Any
 
-import discord
-from discord.ext import commands
+try:
+    import discord
+    from discord.ext import commands
+    _DISCORD_AVAILABLE = True
+except ImportError:
+    discord = None  # type: ignore[assignment]
+    commands = None  # type: ignore[assignment]
+    _DISCORD_AVAILABLE = False
 
 from backend.config.loader import settings
 from backend.services.agent.message import AgentMessage
@@ -43,12 +49,8 @@ class DiscordSource:
         self._channel_ids = set(cfg.channels)
         self._dm_enabled = cfg.dm_enabled
 
-        # Gateway Intents
-        self._intents = discord.Intents.default()
-        self._intents.message_content = True  # 需要在 Developer Portal 开启
-        self._intents.dm_messages = True      # 接收私聊消息
-
-        self._bot: Optional[commands.Bot] = None
+        self._intents = None
+        self._bot: Any = None
         self._task: Optional[asyncio.Task] = None
         self._message_handler: Optional[Callable[[AgentMessage], Awaitable[None]]] = None
 
@@ -70,12 +72,20 @@ class DiscordSource:
         每次连接创建新的 Bot 实例（RISK-02: 不可重用）。
         幂等：已连接时直接返回。
         """
+        if not _DISCORD_AVAILABLE:
+            raise RuntimeError("discord.py 未安装。请运行: pip install discord.py")
+
         if self._bot and not self._bot.is_closed():
             logger.info("Discord Bot 已连接，跳过重复连接")
             return
 
         if not self._token:
             raise ValueError("Discord Bot token 未配置，请在 discord.yaml 或环境变量 QIANXUE_DISCORD__TOKEN 中设置")
+
+        # Gateway Intents (延迟到 connect 时初始化)
+        self._intents = discord.Intents.default()
+        self._intents.message_content = True
+        self._intents.dm_messages = True
 
         self._bot = commands.Bot(intents=self._intents, command_prefix="!")
         self._register_handlers()
@@ -111,7 +121,7 @@ class DiscordSource:
     def _register_handlers(self):
         """在当前 Bot 实例上注册事件处理器。"""
         @self._bot.event
-        async def on_message(message: discord.Message):
+        async def on_message(message):
             await self._handle_message(message)
 
         @self._bot.event
@@ -134,7 +144,7 @@ class DiscordSource:
     # 消息处理
     # ------------------------------------------------------------------
 
-    async def _handle_message(self, message: discord.Message):
+    async def _handle_message(self, message):
         """处理收到的 Discord 消息。"""
         # 忽略自己的消息
         if message.author == self._bot.user:
@@ -149,7 +159,7 @@ class DiscordSource:
         if agent_msg and self._message_handler:
             await self._message_handler(agent_msg)
 
-    def _should_process(self, message: discord.Message) -> bool:
+    def _should_process(self, message) -> bool:
         """判断是否应处理此消息。
 
         DMs 始终处理（如果 dm_enabled），频道只处理配置中的频道。
@@ -160,7 +170,7 @@ class DiscordSource:
         # 只处理配置中指定的频道
         return message.channel.id in self._channel_ids
 
-    async def _convert_message(self, message: discord.Message) -> Optional[AgentMessage]:
+    async def _convert_message(self, message) -> Optional[AgentMessage]:
         """将 Discord Message 转换为 AgentMessage。
 
         字段映射遵循 RESEARCH R-03 映射表。
@@ -204,7 +214,7 @@ class DiscordSource:
     # 语音附件处理
     # ------------------------------------------------------------------
 
-    def _find_voice_attachment(self, message: discord.Message) -> Optional[discord.Attachment]:
+    def _find_voice_attachment(self, message) -> Optional[Any]:
         """检测消息中的语音附件。
 
         识别规则：
@@ -220,7 +230,7 @@ class DiscordSource:
                 return attachment
         return None
 
-    async def _transcribe_voice(self, attachment: discord.Attachment) -> Optional[str]:
+    async def _transcribe_voice(self, attachment) -> Optional[str]:
         """下载语音附件并通过 VoiceService 转写。
 
         下载到 BytesIO，传入 voice_service.transcribe(bytes)。
@@ -313,7 +323,7 @@ class DiscordSource:
             return False
 
         try:
-            file = discord.File(io.BytesIO(audio_bytes), filename=filename)
+            file = discord.File(io.BytesIO(audio_bytes), filename=filename)  # type: ignore[union-attr]
 
             if is_private:
                 user_id_str = channel_id
