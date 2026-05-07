@@ -261,10 +261,16 @@ class VoicePlayer:
 
         # 2. 检查 libopus
         if not discord.opus.is_loaded():
-            try:
-                discord.opus.load_opus('opus')
-            except Exception:
-                pass
+            import os as _os
+            for _opus_path in ['opus', 'libopus',
+                               _os.path.join(_os.getcwd(), 'opus.dll'),
+                               _os.path.join(_os.getcwd(), 'libopus.dll')]:
+                try:
+                    discord.opus.load_opus(_opus_path)
+                    if discord.opus.is_loaded():
+                        break
+                except Exception:
+                    pass
             if not discord.opus.is_loaded():
                 raise RuntimeError(
                     "libopus 未找到。请安装 opus.dll 并确保其在系统 PATH 中，"
