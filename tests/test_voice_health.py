@@ -9,6 +9,7 @@
 """
 
 import asyncio
+import sys
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -80,9 +81,10 @@ async def test_check_ffmpeg_fail():
 @pytest.mark.asyncio
 async def test_check_opus_ok():
     """mock discord.opus.is_loaded() 返回 True -> 返回结果包含 opus=True"""
-    with patch("backend.services.voice_health.discord") as mock_discord:
-        mock_discord.opus.is_loaded.return_value = True
+    mock_discord = MagicMock()
+    mock_discord.opus.is_loaded.return_value = True
 
+    with patch.dict(sys.modules, {"discord": mock_discord}):
         from backend.services.voice_health import check_opus
         ok, msg = await check_opus()
         assert ok is True
@@ -92,10 +94,11 @@ async def test_check_opus_ok():
 @pytest.mark.asyncio
 async def test_check_opus_fail():
     """mock discord.opus.is_loaded() 返回 False 且 load_opus 失败 -> 返回结果包含 opus=False"""
-    with patch("backend.services.voice_health.discord") as mock_discord:
-        mock_discord.opus.is_loaded.return_value = False
-        mock_discord.opus.load_opus.side_effect = Exception("not found")
+    mock_discord = MagicMock()
+    mock_discord.opus.is_loaded.return_value = False
+    mock_discord.opus.load_opus.side_effect = Exception("not found")
 
+    with patch.dict(sys.modules, {"discord": mock_discord}):
         from backend.services.voice_health import check_opus
         ok, msg = await check_opus()
         assert ok is False
@@ -115,9 +118,10 @@ async def test_check_edgetts_ok():
     mock_communicate = MagicMock()
     mock_communicate.stream.return_value = mock_stream()
 
-    with patch("backend.services.voice_health.edge_tts") as mock_etts:
-        mock_etts.Communicate.return_value = mock_communicate
+    mock_etts = MagicMock()
+    mock_etts.Communicate.return_value = mock_communicate
 
+    with patch.dict(sys.modules, {"edge_tts": mock_etts}):
         from backend.services.voice_health import check_edge_tts
         ok, msg = await check_edge_tts("zh-CN-XiaoxiaoNeural")
         assert ok is True
@@ -127,9 +131,10 @@ async def test_check_edgetts_ok():
 @pytest.mark.asyncio
 async def test_check_edgetts_fail():
     """mock 抛异常 -> 返回结果包含 edge_tts=False"""
-    with patch("backend.services.voice_health.edge_tts") as mock_etts:
-        mock_etts.Communicate.side_effect = Exception("Network error")
+    mock_etts = MagicMock()
+    mock_etts.Communicate.side_effect = Exception("Network error")
 
+    with patch.dict(sys.modules, {"edge_tts": mock_etts}):
         from backend.services.voice_health import check_edge_tts
         ok, msg = await check_edge_tts("zh-CN-XiaoxiaoNeural")
         assert ok is False
