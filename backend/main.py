@@ -39,6 +39,7 @@ from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
 from backend.services.heartbeat_manager import heartbeat_manager
 from backend.services.voice_service import voice_service
 from backend.services.voice_player import voice_player
+from backend.services.voice_health import check_voice_dependencies
 
 
 # 配置日志
@@ -179,6 +180,9 @@ async def lifespan(app: FastAPI):
     # 初始化语音服务
     voice_service.reload_config()
     logger.info(f"语音服务已初始化: FunASR={settings.voice.funasr_websocket_url}, TTS音色={settings.voice.tts_default_voice}")
+
+    # 语音依赖健康检查 (D-04: WARNING 不阻塞)
+    await check_voice_dependencies()
 
     # 初始化语音播放器（Phase 18 框架，Phase 20 接入 Discord）
     logger.info(f"语音播放器已初始化: connected={voice_player.is_connected()}")

@@ -11,6 +11,16 @@ os.environ.setdefault("PYTHONUTF8", "1")
 PYTHON = os.environ.get("QIANXUE_PYTHON", sys.executable)
 
 SERVICES = [
+    # FunASR 语音识别 Server (D-03: SERVICES 第一项)
+    # 阿里云镜像（中国大陆推荐）:
+    #   registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13
+    # Docker Hub 镜像（海外环境）:
+    #   funasr/funasr:funasr-runtime-sdk-online-cpu-0.1.13
+    # 注意: 首次运行需要下载模型（可能数分钟），不使用 wait_for (D-04)
+    {"name": "FunASR Server", "tag": "ASR", "color": "35", "delay": 0,
+     "cmd": ["docker", "run", "--rm", "--name", "funasr-server",
+             "-p", "10095:10095",
+             "registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13"]},
     {"name": "Memory API",  "tag": "MEM",  "color": "36", "delay": 0,
      "cmd": [PYTHON, "-m", "Memory.server"]},
     {"name": "Backend API", "tag": "API",  "color": "32", "delay": 0,
@@ -127,6 +137,7 @@ async def main():
   Backend Web:  http://localhost:5002
   Memory API:   http://localhost:8001
   Memory Web:   http://localhost:5001
+  FunASR ASR:   ws://localhost:10095
   Press Ctrl+C to stop all services\033[0m
 """)
 
