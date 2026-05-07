@@ -34,9 +34,9 @@
 ### 基础设施 (Infrastructure)
 
 - [ ] **INFRA-01**: voice.yaml 配置加载集成到 config/loader.py
-- [ ] **INFRA-02**: FunASR Server 健康检查端点（backend 启动时验证连接）
-- [ ] **INFRA-03**: start_all.py 集成 FunASR Server 启动逻辑
-- [ ] **INFRA-04**: FFmpeg 和 Opus 库可用性检查（Discord 语音必需）
+- [x] **INFRA-02**: FunASR Server 健康检查端点（backend 启动时验证连接）
+- [x] **INFRA-03**: start_all.py 集成 FunASR Server 启动逻辑
+- [x] **INFRA-04**: FFmpeg 和 Opus 库可用性检查（Discord 语音必需）
 - [x] **INFRA-05**: Discord Bot token 和配置管理
 
 ## v3.1 Requirements (Deferred)
@@ -92,9 +92,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-05 | Phase 20 | Complete |
 | DISC-06 | Phase 20 | Complete |
 | INFRA-01 | Phase 21 | Pending |
-| INFRA-02 | Phase 21 | Pending |
-| INFRA-03 | Phase 21 | Pending |
-| INFRA-04 | Phase 21 | Pending |
+| INFRA-02 | Phase 21 | Complete |
+| INFRA-03 | Phase 21 | Complete |
+| INFRA-04 | Phase 21 | Complete |
 | INFRA-05 | Phase 19 | Complete |
 
 **Coverage:**

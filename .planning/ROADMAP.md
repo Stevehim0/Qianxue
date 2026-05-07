@@ -51,7 +51,7 @@
 - [x] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由 (completed 2026-05-05)
 - [x] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理 (completed 2026-05-06)
 - [x] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制 (completed 2026-05-06)
-- [ ] **Phase 21: 基础设施与启动集成** - 配置加载、健康检查、启动脚本、依赖检查
+- [x] **Phase 21: 基础设施与启动集成** - 配置加载、健康检查、启动脚本、依赖检查 (completed 2026-05-07)
 
 ## Phase Details
 
@@ -132,7 +132,7 @@ Plans:
   4. 系统启动时验证 FFmpeg 和 Opus 库可用性，缺失时给出明确安装指引
 **Plans**: 1 plan
 Plans:
-- [ ] 21-01-PLAN.md -- voice_health.py 健康检查模块 + start_all.py FunASR Docker + main.py 集成 (INFRA-01~04)
+- [x] 21-01-PLAN.md -- voice_health.py 健康检查模块 + start_all.py FunASR Docker + main.py 集成 (INFRA-01~04)
 
 ## Progress
 
@@ -146,7 +146,7 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 | 18. SendVoice 语音回复工具 | 1/1 | Complete    | 2026-05-05 |
 | 19. Discord 文字与语音消息 | 2/2 | Complete   | 2026-05-06 |
 | 20. Discord 语音频道实时流 | 2/2 | Complete    | 2026-05-06 |
-| 21. 基础设施与启动集成 | 0/1 | Not started | - |
+| 21. 基础设施与启动集成 | 1/1 | Complete   | 2026-05-07 |
 
 ---
 *Last updated: 2026-05-08*

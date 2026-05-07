@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: 实时语音功能
-status: verifying
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-05-06T18:41:41.179Z"
-last_activity: 2026-05-06
+status: executing
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-05-07T16:51:44.000Z"
+last_activity: 2026-05-08 -- Phase 21-infra Plan 01 complete
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 6
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 7
   percent: 100
 ---
 
@@ -22,10 +22,10 @@ progress:
 
 ## Current Position
 
-Phase: 19 (discord) — COMPLETE
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-05-06
+Phase: 21 (infra) — COMPLETE
+Plan: 1 of 1
+Status: Plan 01 complete — all tasks done
+Last activity: 2026-05-08 -- Phase 21 Plan 01 complete
 
 Progress: [██████████] 100%
 
@@ -35,14 +35,14 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 
 **Core value:** 让AI像人类一样拥有记忆 - 不仅是存储和检索，而是主观的、会遗忘的、会做梦的、能联想的记忆体验
 
-**Current focus:** Phase 19 — discord
+**Current focus:** Phase 21 — infra (COMPLETE)
 
 ## Performance Metrics
 
 **Velocity:**
 
 - Total plans completed (v2.0): 75+
-- v3.0 plans completed: 5
+- v3.0 plans completed: 8
 
 **By Phase:**
 
@@ -52,14 +52,15 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 | 17. AgentMessage 语音扩展 | 1/1 | Complete    |
 | 18. SendVoice 语音回复工具 | 1/1 | Complete |
 | 19. Discord 文字与语音消息 | 2/2 | Complete |
-| 20. Discord 语音频道实时流 | 0/? | Not started |
-| 21. 基础设施与启动集成 | 0/? | Not started |
+| 20. Discord 语音频道实时流 | 2/2 | Complete |
+| 21. 基础设施与启动集成 | 1/1 | Complete |
 | Phase 16 P01 | 6min | 3 tasks | 5 files |
 | Phase 17 P01 | 2min | 3 tasks | 3 files |
 | Phase 18 P01 | 3min | 2 tasks | 4 files |
 | Phase 19 P01 | 5min | 2 tasks | 3 files |
 | Phase 19-discord P02 | 3min | 2 tasks | 4 files |
 | Phase 20 P02 | 355 | 2 tasks | 4 files |
+| Phase 21-infra P01 | 7min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,21 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 ### Blockers/Concerns
 
 None yet.
+
+### Phase 21 Decisions
+
+- Lazy imports for discord/edge_tts in voice_health.py: avoids ModuleNotFoundError when packages not installed
+- FunASR Docker uses Alibaba Cloud mirror (funasr_repo) for China mainland, Docker Hub documented as alternative
+- No wait_for on FunASR container: model download takes minutes, health check reports status without blocking
+
+### Phase 20 Decisions
+
+- SilenceSegmentingSink 模块级继承 voice_recv.AudioSink（try/except 降级为 object）
+- 打断使用 stop_playing() 而非 stop()，保持语音接收不中断（R-05）
+- 48kHz 立体声 PCM 包装为 WAV，由 VoiceService._convert_to_pcm() 自动重采样
+- voice_channel_id 配置默认 null，connect_discord 工具读取后传递给 voice_player.connect()
+- DiscordSource.on_ready 注入 Bot 实例到 voice_player（幂等，双重保障）
+- main.py 语音消息处理器复用 Discord 文字消息管道（context/memory/STM/debounce）
 
 ### Phase 19 Decisions
 
@@ -123,9 +139,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-06T18:41:41.173Z
-Stopped at: Completed 20-02-PLAN.md
+Last session: 2026-05-07T16:51:44.000Z
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None
 
 ---
-*State updated: 2026-05-07 - Phase 19 Plan 02 complete*
+*State updated: 2026-05-08 - Phase 21-infra Plan 01 complete*
