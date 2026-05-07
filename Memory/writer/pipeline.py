@@ -441,7 +441,7 @@ class WriterPipeline:
 
         # 加载prompt模板（使用原有逻辑）
         prompt_template = _load_prompt_template()
-        prompt = prompt_template.format(dialogue=dialogue)
+        prompt = prompt_template.format(dialogue=dialogue, ai_personality=self.stable_text or "无")
 
         # 调用LLM（使用原有逻辑）
         l0_text = self.llm_client.call_with_retry(
@@ -557,6 +557,7 @@ class WriterPipeline:
         prompt_template = _load_prompt_template()
         prompt = prompt_template.format(
             dialogue=dialogue,
+            ai_personality=self.stable_text or "无",
             state_focus=state_focus if state_focus else "无",
             state_mood_label=mood_label,
         )

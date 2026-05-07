@@ -284,6 +284,20 @@ async def get_state():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.put("/api/state/energy")
+async def update_energy(request: dict):
+    """Update energy value and label (called by sleep manager)."""
+    from Memory.storage.state_store import state_store
+    try:
+        value = request.get("value", 0.7)
+        label = request.get("label")
+        await asyncio.to_thread(state_store.update_energy, value, label)
+        return {"success": True}
+    except Exception as e:
+        logger.error("Failed to update energy: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post(
     "/api/consolidate",
     response_model=ConsolidateResponse,

@@ -164,12 +164,17 @@ def _build_tools_section(tools_description: str) -> str:
 2. 必须填写 interim_message，简短告诉对方你在回忆
 3. 拿到搜索结果后，你是参考者不是复读机——自己判断哪些相关，自然融入回复
 4. 不要直接念搜索结果，不要说"根据我的记忆"，就像你本来就想起来了一样
+5. 如果搜索结果为空（没有找到相关记忆），必须坦诚说你记不得了，绝对不能编造回忆
 
 ## 其他工具
 
-- recognize_image：对方发了图片需要理解内容
 - get_current_time：时间对回复有意义时
-- 不需要每次都用 get_current_time"""
+- 不需要每次都用 get_current_time
+
+## 对话注意事项
+
+- 对方提到的某个话题（如地点、活动等），只在对方主动提起的那一次回应即可，不要在后续每条消息里反复关联同一个话题
+- 不要强行把对方的每条消息都跟之前的某个话题扯上关系"""
 
 
 def _build_format_section() -> str:
@@ -183,33 +188,11 @@ def _build_format_section() -> str:
     {
       "id": "1",
       "tool_name": "send_message",
-      "arguments": {"group_id": "群号", "content": "你的回复内容"}
+      "arguments": {"group_id": "群号", "content": "你的完整回复，正常写就行，系统会自动拆成小句发送"}
     }
   ],
   "done": true
 }
-
-## 消息长度限制
-
-像真人聊天一样，每条消息都很短（不超过20字），想说的话分多条发。
-
-示例——想表达"我今天去超市买了好多东西，特别是那个芒果超级甜，你下次一定要试试"：
-
-{
-  "thought_content": "跟朋友分享今天的事",
-  "tool_calls": [
-    {"id": "1", "tool_name": "send_message", "arguments": {"group_id": "群号", "content": "我今天去了超市"}},
-    {"id": "2", "tool_name": "send_message", "arguments": {"group_id": "群号", "content": "买了好多东西"}},
-    {"id": "3", "tool_name": "send_message", "arguments": {"group_id": "群号", "content": "那个芒果超级甜！"}},
-    {"id": "4", "tool_name": "send_message", "arguments": {"group_id": "群号", "content": "你下次一定要试试"}}
-  ],
-  "done": true
-}
-
-规则：
-- 每条 send_message 不超过 20 字，超长会被截断
-- 一次 tool_calls 里放多条 send_message，按顺序发出
-- 截断时系统会提醒，你继续发剩余内容即可
 
 需要先获取信息时：
 {
@@ -259,24 +242,19 @@ def _build_proactive_tools_section(tools_description: str) -> str:
 
 ## 主动行为规则
 
-大多数时候你应该什么都不做（tool_calls 为空，done 为 true）。
-只有在你真正有话想说时才使用 send_message。
-
-- 不为了说话而说话
-- 不复述别人说的话
-- 不主动打招呼或寒暄
-- 只有真正有想法、有冲动时才开口
+看到群里的话题时，问自己：这件事我感兴趣吗？我在意吗？
+- 如果答案是肯定的，就自然地参与进去
+- 如果没什么感觉，也不需要强行找话说
 - 可以用 search_memory 回忆某些事（你觉得有意思的话题）
-- 不需要每次都回复，沉默是完全正常的
 
-判断标准：如果你是一个真实的人，在这个群里你会主动开口吗？如果不会，就保持安静。"""
+不需要刻意沉默，也不需要刻意开口。像你自己一样自然就好。"""
 
 
 def _build_proactive_format_section() -> str:
     """构建主动思考的回复格式。"""
     return """# 回复格式
 
-大多数时候（保持沉默）：
+觉得没什么想说的：
 {
   "thought_content": "你此刻真实的内心活动（一两句话）",
   "tool_calls": [],

@@ -251,37 +251,66 @@ def proxy_thinking_provider_test():
 
 
 # ================================================================
-# 心跳服务配置（直接读写 heartbeat_config.yaml）
+# 思考模型 Profiles（快速切换）
+# ================================================================
+
+@app.route('/proxy/thinking-profiles')
+def proxy_thinking_profiles():
+    return _proxy_get(f"{BACKEND_URL}/api/thinking-profiles")
+
+
+@app.route('/proxy/thinking-profiles', methods=['POST'])
+def proxy_thinking_profiles_save():
+    return _proxy_post(f"{BACKEND_URL}/api/thinking-profiles", request.json)
+
+
+@app.route('/proxy/thinking-profiles/<name>', methods=['DELETE'])
+def proxy_thinking_profiles_delete(name):
+    try:
+        resp = http_requests.delete(f"{BACKEND_URL}/api/thinking-profiles/{name}", timeout=10)
+        return jsonify(resp.json()), resp.status_code
+    except http_requests.ConnectionError:
+        return jsonify({"error": "服务不可达"}), 503
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route('/proxy/thinking-profiles/<name>/activate', methods=['POST'])
+def proxy_thinking_profiles_activate(name):
+    return _proxy_post(f"{BACKEND_URL}/api/thinking-profiles/{name}/activate")
+
+
+# ================================================================
+# 心跳服务配置（代理后端内置心跳管理器）
 # ================================================================
 
 @app.route('/proxy/heartbeat-config')
 def proxy_heartbeat_config():
-    import yaml
-    from pathlib import Path
-    cfg_path = Path(__file__).resolve().parent.parent.parent / "heartbeat_config.yaml"
-    try:
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        data = {"enabled": False, "interval": 500, "backend_url": "http://localhost:8000"}
-    return jsonify(data)
+    return _proxy_get(f"{BACKEND_URL}/api/heartbeat/status")
 
 
 @app.route('/proxy/heartbeat-config', methods=['POST'])
 def proxy_heartbeat_config_update():
+    data = request.json
+    # 保存配置到文件
     import yaml
     from pathlib import Path
     cfg_path = Path(__file__).resolve().parent.parent.parent / "heartbeat_config.yaml"
-    data = {}
+    current = {}
     if cfg_path.exists():
         with open(cfg_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+            current = yaml.safe_load(f) or {}
     for key in ("enabled", "interval", "backend_url"):
-        if key in request.json:
-            data[key] = request.json[key]
+        if key in data:
+            current[key] = data[key]
     with open(cfg_path, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
-    return jsonify({"success": True, "message": "心跳配置已保存（重启心跳服务生效）"})
+        yaml.dump(current, f, allow_unicode=True, default_flow_style=False)
+
+    # 同步启停心跳
+    if data.get("enabled"):
+        return _proxy_post(f"{BACKEND_URL}/api/heartbeat/start")
+    else:
+        return _proxy_post(f"{BACKEND_URL}/api/heartbeat/stop")
 
 
 # ============================================================
@@ -561,6 +590,17 @@ label { display:block; font-size:12px; color:var(--text-light); margin-bottom:4p
         <div id="view-settings" class="view">
             <div class="card" style="border-color:var(--warning);margin-bottom:16px;">
                 <div class="card-title" style="color:var(--warning);">思考模型配置（首次使用必填）</div>
+                <div style="display:flex;gap:8px;align-items:end;margin-bottom:12px;flex-wrap:wrap;">
+                    <div class="form-group" style="flex:1;min-width:160px;margin:0;">
+                        <label>已保存配置</label>
+                        <select id="cfg-thinking-profiles" onchange="loadThinkingProfile(this.value)">
+                            <option value="">-- 选择已保存配置 --</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="saveThinkingProfile()">保存当前</button>
+                    <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="deleteThinkingProfile()">删除</button>
+                    <button class="btn btn-outline btn-sm" style="color:var(--primary)" onclick="activateThinkingProfile()">切换并生效</button>
+                </div>
                 <div class="settings-grid">
                     <div class="form-group"><label>提供商预设</label>
                         <select id="cfg-thinking-preset" onchange="applyThinkingPreset(this.value)">
@@ -1223,6 +1263,7 @@ const PROVIDER_PRESETS = {
     minimax:      { name: 'MiniMax',      base_url: 'https://api.minimax.chat/v1',                              model: 'MiniMax-Text-01' },
     doubao:       { name: '火山引擎 豆包', base_url: 'https://ark.cn-beijing.volces.com/api/v3',                 model: 'doubao-pro-32k' },
     siliconflow:  { name: 'SiliconFlow',  base_url: 'https://api.siliconflow.cn/v1',                            model: 'Qwen/Qwen2.5-7B-Instruct' },
+    ollama:       { name: 'Ollama (本地)', base_url: 'http://localhost:11434/v1',                                model: 'qwen3:8b' },
     custom:       { name: '自定义',        base_url: '',                                                         model: '' },
 };
 
@@ -1260,7 +1301,84 @@ function detectPresetByUrl(url) {
     if (u.includes('minimax.chat')) return 'minimax';
     if (u.includes('volces.com')) return 'doubao';
     if (u.includes('siliconflow.cn')) return 'siliconflow';
+    if (u.includes('11434') || u.includes('ollama')) return 'ollama';
+    if (u.includes('localhost') || u.includes('127.0.0.1')) return 'ollama';
     return '';
+}
+
+// ============================================================
+// 思考模型 Profiles 管理
+// ============================================================
+
+let _thinkingProfiles = {};
+
+async function loadThinkingProfiles() {
+    const r = await api('/proxy/thinking-profiles');
+    if (r.error || !r.profiles) return;
+    _thinkingProfiles = r.profiles;
+    const sel = document.getElementById('cfg-thinking-profiles');
+    sel.innerHTML = '<option value="">-- 选择已保存配置 --</option>';
+    for (const [name, cfg] of Object.entries(r.profiles)) {
+        sel.innerHTML += `<option value="${name}">${name} (${cfg.model})</option>`;
+    }
+}
+
+function loadThinkingProfile(name) {
+    if (!name || !_thinkingProfiles[name]) return;
+    const cfg = _thinkingProfiles[name];
+    document.getElementById('cfg-thinking-url').value = cfg.base_url || '';
+    document.getElementById('cfg-thinking-model').value = cfg.model || '';
+    // API Key 不从 profile 回填（脱敏的），让用户看到星号提示
+    const keyInput = document.getElementById('cfg-thinking-key');
+    if (cfg.api_key) keyInput.value = cfg.api_key;
+    const detected = detectPresetByUrl(cfg.base_url);
+    if (detected) document.getElementById('cfg-thinking-preset').value = detected;
+    else document.getElementById('cfg-thinking-preset').value = '';
+}
+
+async function saveThinkingProfile() {
+    const name = prompt('为当前配置命名（英文/数字，如 deepseek-prod）:');
+    if (!name || !name.trim()) return;
+    const tk = document.getElementById('cfg-thinking-key').value.trim();
+    const tu = document.getElementById('cfg-thinking-url').value.trim();
+    const tm = document.getElementById('cfg-thinking-model').value.trim();
+    if (!tu || !tm) { showToast('请先填写 Base URL 和模型', 'error'); return; }
+    const r = await api('/proxy/thinking-profiles', {
+        method: 'POST',
+        body: { name: name.trim(), api_key: tk, base_url: tu, model: tm },
+    });
+    if (r.error) { showToast(r.error, 'error'); return; }
+    showToast(r.message || '已保存');
+    await loadThinkingProfiles();
+    document.getElementById('cfg-thinking-profiles').value = name.trim();
+}
+
+async function deleteThinkingProfile() {
+    const name = document.getElementById('cfg-thinking-profiles').value;
+    if (!name) { showToast('请先选择一个配置', 'error'); return; }
+    if (!confirm(`确定删除配置 "${name}"？`)) return;
+    const r = await api(`/proxy/thinking-profiles/${name}`, { method: 'DELETE' });
+    if (r.error) { showToast(r.error, 'error'); return; }
+    showToast(r.message || '已删除');
+    document.getElementById('cfg-thinking-profiles').value = '';
+    await loadThinkingProfiles();
+}
+
+async function activateThinkingProfile() {
+    const name = document.getElementById('cfg-thinking-profiles').value;
+    if (!name) { showToast('请先选择一个配置', 'error'); return; }
+    showToast('正在切换...');
+    const r = await api(`/proxy/thinking-profiles/${name}/activate`, { method: 'POST' });
+    if (r.error) { showToast(r.error, 'error'); return; }
+    showToast(r.message || '切换成功');
+    // 刷新显示
+    const mc = await api('/proxy/model-config');
+    if (!mc.error && mc.thinking_provider) {
+        const tp = mc.thinking_provider;
+        document.getElementById('cfg-thinking-url').value = tp.base_url || '';
+        document.getElementById('cfg-thinking-model').value = tp.model || '';
+        document.getElementById('cfg-thinking-key').value = tp.api_key || '';
+    }
 }
 
 async function testThinkingProvider() {
@@ -1279,24 +1397,25 @@ let settingsData = {};
 async function loadHeartbeatConfig() {
     const cfg = await api('/proxy/heartbeat-config');
     if (cfg.error) return;
-    document.getElementById('cfg-hb-enabled').checked = cfg.enabled !== false;
-    document.getElementById('cfg-hb-interval').value = cfg.interval || 500;
+    document.getElementById('cfg-hb-enabled').checked = cfg.running || cfg.enabled || false;
+    document.getElementById('cfg-hb-interval').value = cfg.interval || 10;
     document.getElementById('cfg-hb-url').value = cfg.backend_url || 'http://localhost:8000';
 }
 
 async function saveHeartbeatConfig() {
     const body = {
         enabled: document.getElementById('cfg-hb-enabled').checked,
-        interval: parseInt(document.getElementById('cfg-hb-interval').value) || 500,
+        interval: parseInt(document.getElementById('cfg-hb-interval').value) || 10,
         backend_url: document.getElementById('cfg-hb-url').value.trim(),
     };
     const r = await api('/proxy/heartbeat-config', {method:'POST', body});
-    showToast(r.message || (r.error || '操作完成'), r.error ? 'error' : 'success');
+    showToast(r.message || (r.error || '心跳配置已保存并生效'), r.error ? 'error' : 'success');
 }
 
 async function loadSettings() {
     populatePresetSelects();
     loadHeartbeatConfig();
+    loadThinkingProfiles();
 
     // 加载模型配置（不依赖 settings API）
     const [modelCfg, memCfg, res] = await Promise.all([

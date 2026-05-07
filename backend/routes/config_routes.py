@@ -426,6 +426,69 @@ async def test_thinking_provider(request: ProviderConfigRequest):
 
 
 # ================================================================
+# 思考模型 Profiles 管理 API
+# ================================================================
+
+class ProfileSaveRequest(BaseModel):
+    """保存 profile 请求。"""
+    name: str
+    api_key: str = ""
+    base_url: str = ""
+    model: str = ""
+
+
+@router.get("/thinking-profiles")
+async def get_thinking_profiles():
+    """列出所有已保存的思考模型配置。"""
+    from backend.config.loader import list_thinking_profiles
+    return list_thinking_profiles()
+
+
+@router.post("/thinking-profiles")
+async def save_profile(request: ProfileSaveRequest):
+    """保存当前配置为一个命名的 profile。"""
+    from backend.config.loader import save_thinking_profile
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="配置名称不能为空")
+    save_thinking_profile(name, request.api_key, request.base_url, request.model)
+    return ApiResponse(success=True, message=f"配置 '{name}' 已保存")
+
+
+@router.delete("/thinking-profiles/{name}")
+async def delete_profile(name: str):
+    """删除一个已保存的 profile。"""
+    from backend.config.loader import delete_thinking_profile
+    delete_thinking_profile(name)
+    return ApiResponse(success=True, message=f"配置 '{name}' 已删除")
+
+
+@router.post("/thinking-profiles/{name}/activate")
+async def activate_profile(name: str):
+    """激活一个已保存的 profile（切换到该配置）。"""
+    from backend.config.loader import load_thinking_profile_raw, save_thinking_provider
+    profile = load_thinking_profile_raw(name)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"配置 '{name}' 不存在")
+
+    api_key = profile.get("api_key", "")
+    base_url = profile.get("base_url", "")
+    model = profile.get("model", "")
+
+    # 创建 provider 并激活
+    provider = create_provider("thinking", api_key, base_url, model)
+    if not provider:
+        raise HTTPException(status_code=400, detail="无法创建思考模型提供者")
+    llm_manager.set_thinking_provider_direct(provider)
+
+    # 持久化到 thinking_provider
+    save_thinking_provider(api_key, base_url, model)
+
+    logger.info(f"已切换到配置 '{name}': {base_url} / {model}")
+    return ApiResponse(success=True, message=f"已切换到 '{name}'")
+
+
+# ================================================================
 # 通用 Settings 管理 API
 # ================================================================
 

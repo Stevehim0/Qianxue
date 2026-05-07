@@ -41,9 +41,14 @@ class MemoryProvider:
     async def retrieve_briefing(
         self,
         query: str,
+        context: Optional[dict] = None,
     ) -> Optional[str]:
         """通过关键词召回记忆简报."""
         return None
+
+    async def get_ai_state(self) -> dict:
+        """获取 AI 当前状态."""
+        return {}
 
     async def extract_and_store(
         self,

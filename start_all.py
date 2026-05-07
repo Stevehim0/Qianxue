@@ -13,15 +13,16 @@ PYTHON = os.environ.get("QIANXUE_PYTHON", sys.executable)
 SERVICES = [
     {"name": "Memory API",  "tag": "MEM",  "color": "36", "delay": 0,
      "cmd": [PYTHON, "-m", "Memory.server"]},
-    {"name": "Backend API", "tag": "API",  "color": "32", "delay": 3,
+    {"name": "Backend API", "tag": "API",  "color": "32", "delay": 0,
+     "wait_for": "http://localhost:8001/health",
      "cmd": [PYTHON, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]},
     {"name": "Memory Web",  "tag": "MWEB", "color": "34", "delay": 0,
      "cmd": [PYTHON, "Memory/web/app.py"]},
     {"name": "Backend Web", "tag": "BWEB", "color": "33", "delay": 0,
      "cmd": [PYTHON, "backend/web/app.py"]},
-    {"name": "Heartbeat",   "tag": "HB",   "color": "35", "delay": 0,
-     "cmd": [PYTHON, "-m", "heartbeat"]},
 ]
+
+MEM_READY_FLAG = asyncio.Event()
 
 processes: dict[str, asyncio.subprocess.Process] = {}
 shutting_down = False
@@ -32,8 +33,36 @@ def tag(svc):
     return f"\033[{c}m[{svc['tag']}]\033[0m"
 
 
+async def wait_for_url(url: str, timeout: float = 60, interval: float = 1.0):
+    """轮询等待 URL 可访问。"""
+    import urllib.request
+    import urllib.error
+    elapsed = 0.0
+    while elapsed < timeout:
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=3):
+                return True
+        except (urllib.error.URLError, ConnectionError, OSError):
+            await asyncio.sleep(interval)
+            elapsed += interval
+    return False
+
+
 async def run_service(svc: dict):
     global shutting_down
+
+    # 等待依赖服务就绪
+    wait_url = svc.get("wait_for")
+    if wait_url:
+        svc_tag = tag(svc)
+        print(f"{svc_tag} 等待依赖服务就绪: {wait_url}")
+        ok = await wait_for_url(wait_url)
+        if not ok:
+            print(f"{svc_tag} 依赖服务未就绪，超时跳过")
+            return
+        print(f"{svc_tag} 依赖服务已就绪，启动中...")
+
     if svc["delay"]:
         await asyncio.sleep(svc["delay"])
     while not shutting_down:

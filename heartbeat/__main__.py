@@ -1,14 +1,13 @@
-"""心跳服务入口。
+"""心跳服务入口（已废弃 — 心跳已集成到后端进程内）。
 
-用法: python -m heartbeat
+心跳循环现在由 backend/services/heartbeat_manager.py 管理，
+随 Backend API 进程一起启动，无需单独运行。
+
+保留此文件仅为向后兼容。如需配置心跳，请使用 Web 界面的"心跳服务"设置。
 """
 
-import asyncio
 import logging
 import sys
-
-from heartbeat.config import load_config
-from heartbeat.loop import HeartbeatLoop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,15 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    config_path = None
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-
-    config = load_config(config_path)
-
-    loop = HeartbeatLoop(config)
-    logger.info("Starting heartbeat service...")
-    asyncio.run(loop.run())
+    logger.warning(
+        "心跳服务已集成到后端进程内，无需单独运行。"
+        "请通过 Web 界面配置心跳，或重启 Backend API 进程。"
+    )
 
 
 if __name__ == "__main__":

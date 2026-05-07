@@ -21,14 +21,17 @@ logger = logging.getLogger(__name__)
 class SleepManager:
     """AI 睡眠状态管理器。"""
 
-    enabled: bool = settings.sleep.enabled
-
     def __init__(self):
         self._private_queue: Dict[str, List[Tuple[AgentMessage, str]]] = {}
         self._state = "AWAKE"
         self._last_wind_down_date: str = ""
         self._brain = None
         self._energy_label: str = "充沛"
+
+    @property
+    def enabled(self) -> bool:
+        """动态读取 settings，而非在类定义时快照。"""
+        return settings.sleep.enabled
 
     def set_brain(self, brain) -> None:
         self._brain = brain
@@ -50,6 +53,18 @@ class SleepManager:
     def should_skip_heartbeat(self) -> bool:
         return self._state in ("ASLEEP", "WINDING_DOWN")
 
+    @staticmethod
+    def _in_range(hour: int, start: int, end: int) -> bool:
+        """判断 hour 是否在 [start, end) 范围内，支持跨午夜。
+
+        例: _in_range(0, 23, 8) → True  (23点段到次日8点)
+            _in_range(8, 8, 23) → True  (8点到23点)
+        """
+        if start <= end:
+            return start <= hour < end
+        else:
+            return hour >= start or hour < end
+
     def check_and_transition(self) -> bool:
         """检查当前时间，执行状态转换。返回是否刚发生唤醒。"""
         if not self.enabled:
@@ -57,10 +72,14 @@ class SleepManager:
 
         hour = datetime.now().hour
         today = datetime.now().strftime("%Y-%m-%d")
+
+        wake = settings.sleep.wake_hour
+        wind = settings.sleep.wind_down_hour
+        sleep = settings.sleep.sleep_hour
         prev = self._state
 
-        if settings.sleep.wake_hour <= hour < settings.sleep.wind_down_hour:
-            # 08:00 ~ 22:59 → 清醒
+        # 三个时段：AWAKE [wake, wind) | WINDING_DOWN [wind, sleep) | ASLEEP [sleep, wake)
+        if self._in_range(hour, wake, wind):
             if self._state != "AWAKE":
                 logger.info(f"睡眠状态转换: {self._state} → AWAKE")
                 self._state = "AWAKE"
@@ -68,8 +87,7 @@ class SleepManager:
                 self._sync_state_api(settings.sleep.awake_energy_value, settings.sleep.awake_energy_label)
                 return True
 
-        elif hour >= settings.sleep.wind_down_hour:
-            # 23:00 ~ 23:59 → 困倦
+        elif self._in_range(hour, wind, sleep):
             if self._state == "AWAKE" and self._last_wind_down_date != today:
                 self._last_wind_down_date = today
                 logger.info("睡眠状态转换: AWAKE → WINDING_DOWN")
@@ -77,8 +95,7 @@ class SleepManager:
                 self._energy_label = "困倦"
                 self._sync_state_api(settings.sleep.tired_energy_value, settings.sleep.tired_energy_label)
 
-        elif hour < settings.sleep.wake_hour:
-            # 00:00 ~ 07:59 → 睡眠
+        else:  # ASLEEP: [sleep, wake)
             if self._state != "ASLEEP":
                 logger.info(f"睡眠状态转换: {self._state} → ASLEEP")
                 self._state = "ASLEEP"
@@ -105,11 +122,21 @@ class SleepManager:
         """同步更新 Memory 服务 state 层的 energy（fire-and-forget HTTP）。"""
         try:
             import httpx
-            # Memory 服务目前没有 PUT /api/state 端点，
-            # 这里先记日志，后续可以加上
-            logger.info(f"状态同步: energy={value}, label={label}（待 Memory API 支持）")
+            import asyncio
+            url = f"{settings.memory.service_url}/api/state/energy"
+            asyncio.create_task(self._do_sync(url, value, label))
+            logger.info(f"状态同步: energy={value}, label={label}")
         except Exception as e:
             logger.warning(f"状态同步失败: {e}")
+
+    @staticmethod
+    async def _do_sync(url: str, value: float, label: str):
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                await client.put(url, json={"value": value, "label": label})
+        except Exception:
+            pass
 
     async def handle_wake_up(self) -> None:
         """唤醒序列：恢复能量 + STM 注入 + 处理积压私聊。"""

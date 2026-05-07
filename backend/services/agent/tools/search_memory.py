@@ -94,6 +94,7 @@ class SearchMemoryTool(Tool):
                 return {
                     "success": True,
                     "briefing": None,
+                    "message": "没有找到相关记忆。如果用户问的是过去的事，请直接说你记不得了，不要编造。",
                     "query": query,
                 }
 

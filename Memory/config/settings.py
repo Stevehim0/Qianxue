@@ -31,7 +31,9 @@ class ModelsConfig:
     """模型配置。"""
 
     embedding_model: str = "BAAI/bge-base-zh"  # Embedding 模型名称
-    llm_provider: str = "qianwen"  # LLM 提供商（qianwen/deepseek/openai_compatible）
+    llm_provider: str = field(
+        default_factory=lambda: os.getenv("LLM_PROVIDER", "qianwen")
+    )  # LLM 提供商（qianwen/deepseek/openai_compatible）
     llm_api_key: Optional[str] = field(
         default_factory=lambda: os.getenv("LLM_API_KEY")
     )  # LLM API 密钥

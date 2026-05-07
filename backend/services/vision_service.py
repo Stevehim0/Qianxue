@@ -1,4 +1,4 @@
-"""Vision服务模块 - 通义千问VL图片识别."""
+"""Vision服务模块 - 图片识别（支持GIF动图拆帧）."""
 
 import logging
 import json
@@ -14,51 +14,98 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _extract_gif_frames(image_bytes: bytes, max_frames: int = 3) -> Optional[bytes]:
+    """尝试从 GIF 提取关键帧并拼接为一张静态图。
+
+    提取首帧、中间帧、末帧，缩小后水平拼接，返回 JPEG bytes。
+    如果不是 GIF 或提取失败，返回 None。
+    """
+    try:
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(image_bytes))
+        if not hasattr(img, 'is_animated') or not img.is_animated:
+            return None
+
+        frame_count = img.n_frames
+        if frame_count <= 1:
+            return None
+
+        # 取3帧：首、中、末
+        if frame_count <= max_frames:
+            indices = list(range(frame_count))
+        else:
+            mid = frame_count // 2
+            indices = [0, mid, frame_count - 1]
+
+        # 每帧缩小到最大 200px 宽
+        max_w = 200
+        frames = []
+        for idx in indices:
+            img.seek(idx)
+            frame = img.convert('RGB')
+            if frame.width > max_w:
+                ratio = max_w / frame.width
+                frame = frame.resize((max_w, int(frame.height * ratio)), Image.LANCZOS)
+            frames.append(frame)
+
+        total_width = sum(f.width for f in frames)
+        max_height = max(f.height for f in frames)
+        combined = Image.new('RGB', (total_width, max_height))
+
+        x_offset = 0
+        for f in frames:
+            combined.paste(f, (x_offset, 0))
+            x_offset += f.width
+
+        buf = io.BytesIO()
+        combined.save(buf, format='JPEG', quality=75)
+        logger.info(f"GIF拆帧: {frame_count}帧, 提取{len(indices)}帧拼接, {buf.tell()} bytes")
+        return buf.getvalue()
+
+    except ImportError:
+        logger.debug("Pillow未安装，跳过GIF拆帧")
+        return None
+    except Exception as e:
+        logger.warning(f"GIF拆帧失败: {e}")
+        return None
+
+
 class VisionService:
-    """Vision 服务 - 通义千问 VL API"""
+    """Vision 服务 - 多模态 VL API"""
 
     def __init__(self):
-        """初始化Vision服务"""
         self.config = config_manager.get_vision_config()
-        self.client = httpx.AsyncClient(timeout=settings.vision.timeout)
+        self.client = httpx.AsyncClient(timeout=120.0)
 
     def reload_config(self):
-        """重新加载配置"""
         self.config = config_manager.get_vision_config()
         logger.info("Vision配置已重新加载")
 
     async def download_and_convert_to_base64(self, image_url: str) -> Optional[str]:
-        """
-        下载图片并转换为base64格式
-
-        Args:
-            image_url: QQ图片URL
-
-        Returns:
-            base64编码的图片数据（带data:image前缀），失败返回None
-        """
+        """下载图片并转换为base64。GIF 会自动拆帧拼接。"""
         try:
             logger.info(f"正在下载图片: {image_url[:50]}...")
 
-            # 下载图片
             response = await self.client.get(image_url, timeout=settings.vision.image_download_timeout)
             if response.status_code != 200:
                 logger.warning(f"下载图片失败: status={response.status_code}")
                 return None
 
-            # 获取图片数据
             image_bytes = response.content
 
-            # 转换为base64
+            # 尝试 GIF 拆帧
+            frames_image = _extract_gif_frames(image_bytes)
+            if frames_image:
+                base64_data = base64.b64encode(frames_image).decode('utf-8')
+                return f"data:image/png;base64,{base64_data}"
+
+            # 普通图片
             base64_data = base64.b64encode(image_bytes).decode('utf-8')
-
-            # 检测图片类型
             content_type = response.headers.get('content-type', 'image/jpeg')
-
-            # 返回data URL格式
-            result = f"data:{content_type};base64,{base64_data}"
             logger.info(f"图片转换成功: {len(base64_data)} 字符")
-            return result
+            return f"data:{content_type};base64,{base64_data}"
 
         except Exception as e:
             logger.error(f"下载并转换图片失败: {e}")
@@ -70,43 +117,25 @@ class VisionService:
         is_meme: bool = False,
         context: str = "群聊表情包"
     ) -> Optional[str]:
-        """
-        识别图片内容
-
-        Args:
-            image_url: 图片URL
-            is_meme: 是否为表情包
-            context: 上下文提示
-
-        Returns:
-            图片描述文本，失败返回None
-        """
+        """识别图片内容，返回描述文本。"""
         if not self.config["enabled"]:
             logger.info("Vision服务未启用")
             return None
 
-        # 检查API密钥
         if not self.config["api_key"]:
             logger.warning("Vision API密钥未配置")
             return None
 
-        # 根据是否为表情包选择不同的prompt
-        if is_meme:
-            system_prompt = self._get_meme_prompt()
-        else:
-            system_prompt = self._get_normal_prompt()
+        system_prompt = self._get_meme_prompt() if is_meme else self._get_normal_prompt()
 
-        # 尝试将URL转换为base64（解决QQ图片URL访问限制问题）
         base64_image = await self.download_and_convert_to_base64(image_url)
         if base64_image:
-            # 使用OpenAI兼容的image_url格式
             user_content = [
                 {"type": "image_url", "image_url": {"url": base64_image}},
                 {"type": "text", "text": system_prompt}
             ]
-            logger.info("使用base64格式调用Vision API（OpenAI兼容格式）")
+            logger.info("使用base64格式调用Vision API")
         else:
-            # 降级：直接使用URL
             logger.warning("无法转换为base64，尝试直接使用URL")
             user_content = [
                 {"type": "image_url", "image_url": {"url": image_url}},
@@ -125,69 +154,46 @@ class VisionService:
             ]
         }
 
-        # 重试机制
         for attempt in range(self.config["max_retries"]):
             try:
                 response = await self.client.post(
                     f"{self.config['base_url']}/chat/completions",
                     headers=headers,
                     json=data,
-                    timeout=self.config["timeout"]
+                    timeout=self.config["timeout"] * 2
                 )
 
                 if response.status_code == 200:
                     result = response.json()
 
-                    # ===== 调试日志：输出完整API响应 =====
-                    logger.info("="*60)
-                    logger.info("【Vision API 完整响应】")
-                    logger.info(f"完整响应JSON: {json.dumps(result, ensure_ascii=False, indent=2)}")
-                    logger.info("="*60)
-
-                    # 安全提取 content - 处理不同的 API 响应格式
                     try:
                         content = result["choices"][0]["message"]["content"]
 
-                        # 处理不同的 content 格式
                         if isinstance(content, list):
-                            # 格式1: content 是列表 [{type: "text", text: "..."}]
-                            if len(content) > 0:
-                                # 查找 text 类型的内容
-                                text_content = None
-                                for item in content:
-                                    if isinstance(item, dict) and item.get("type") == "text":
-                                        text_content = item.get("text")
-                                        break
-                                if text_content:
-                                    description = text_content
-                                else:
-                                    # 如果没找到 text 类型，直接取第一个元素
-                                    description = str(content[0])
-                            else:
-                                description = ""
+                            text_content = None
+                            for item in content:
+                                if isinstance(item, dict) and item.get("type") == "text":
+                                    text_content = item.get("text")
+                                    break
+                            description = text_content or str(content[0]) if content else ""
                         elif isinstance(content, str):
-                            # 格式2: content 是字符串
                             description = content
                         else:
-                            # 其他格式，转字符串
                             description = str(content)
 
                         logger.info(f"图片识别成功: {description[:100]}...")
-                        logger.info(f"提取的描述内容: {description}")
-                        logger.info(f"描述长度: {len(description)} 字符")
                         return description if description else None
                     except (KeyError, IndexError, TypeError) as e:
                         logger.error(f"解析 API 响应失败: {e}")
-                        logger.error(f"响应结构: {result}")
                         return None
 
                 else:
-                    logger.warning(f"Vision API返回错误: {response.status_code}")
+                    logger.warning(f"Vision API返回错误: {response.status_code}, body: {response.text[:300]}")
                     if attempt < self.config["max_retries"] - 1:
                         continue
 
             except Exception as e:
-                logger.error(f"Vision API调用失败: {e}")
+                logger.error(f"Vision API调用失败: {type(e).__name__}: {e}")
                 if attempt == 0:
                     return "图片识别失败，请稍后重试"
 
@@ -195,26 +201,14 @@ class VisionService:
         return None
 
     def _get_normal_prompt(self) -> str:
-        """普通图片识别的Prompt"""
-        return """请分析这张图片，用简体中文描述：
-1. 图片表达了什么情绪？（开心/无奈/调侃/愤怒等）
-2. 适合用在什么场景？
-3. 如果有必要回复，应该怎么回复？
-
-请用1-2句话简洁描述。
-"""
+        return "请详细描述这张图片的内容。包括：画面中有什么人/物/场景、文字内容、颜色和构图等视觉细节。用中文回答。"
 
     def _get_meme_prompt(self) -> str:
-        """表情包识别的Prompt"""
-        return """这是一个表情包（表情梗图），请重点分析：
-1. 它表达了什么情绪或态度？（无奈/调侃/讽刺/自嘲/开心等）
-2. 幽默点或梗在哪里？
-3. 适合怎么回复？（回表情包/简短文字/不需要回复）
+        return (
+            "这是一个表情包，图片可能是GIF动图的关键帧从左到右拼接（代表动作的先后变化）。"
+            "请描述：1. 角色/人物在做什么动作（如点头、摇头、鼓掌、挥手等）2. 表情和情绪"
+            "3. 图上有什么文字。不要猜测角色名字或出处，只关注动作和情绪。用中文简短回答。"
+        )
 
-请用简短格式总结：[情绪] - [回复建议]
-例如：
-"无奈 - 可以回复'太真实了'或无奈表情包"
-"调侃 - 可以顺着梗回复"
-"""
 
 vision_service = VisionService()

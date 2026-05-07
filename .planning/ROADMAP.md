@@ -50,7 +50,7 @@
 - [x] **Phase 17: AgentMessage 语音扩展** - 消息模型增加语音字段，Brain处理语音转写展示 (completed 2026-05-04)
 - [x] **Phase 18: SendVoice 语音回复工具** - AI可选择发送语音回复，平台感知路由 (completed 2026-05-05)
 - [x] **Phase 19: Discord 文字与语音消息** - Discord Bot接入，文字消息和语音附件消息处理 (completed 2026-05-06)
-- [x] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制 (completed 2026-05-06)
+- [x] **Phase 20: Discord 语音频道实时流** - 语音频道加入/播放/接收/打断机制 (completed 2026-05-06)
 - [ ] **Phase 21: 基础设施与启动集成** - 配置加载、健康检查、启动脚本、依赖检查
 
 ## Phase Details
@@ -116,8 +116,10 @@ Plans:
   1. 千雪 Bot 可以加入 Discord 语音频道并播放 TTS 生成的音频流
   2. 用户在语音频道说话时，千雪能接收语音流并通过 FunASR 转写后进入对话流程
   3. TTS 音频播放过程中，如果用户开始说话，千雪停止当前播放并处理用户输入（打断机制）
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+Plans:
+- [x] 20-01-PLAN.md -- VoicePlayer core + config extension (DISC-04, DISC-05, DISC-06)
+- [x] 20-02-PLAN.md -- Tool extensions + DiscordSource wiring + main.py integration (DISC-04, DISC-05, DISC-06)
 
 ### Phase 21: 基础设施与启动集成
 **Goal**: 所有语音相关基础设施集成到项目启动和健康检查流程中
@@ -128,7 +130,9 @@ Plans:
   2. 后端启动时检查 FunASR Server 连接状态，不可用时打印警告而非崩溃
   3. start_all.py 包含 FunASR Server Docker 容器的启动逻辑
   4. 系统启动时验证 FFmpeg 和 Opus 库可用性，缺失时给出明确安装指引
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 21-01-PLAN.md -- voice_health.py 健康检查模块 + start_all.py FunASR Docker + main.py 集成 (INFRA-01~04)
 
 ## Progress
 
@@ -141,8 +145,8 @@ Phases 16-17 (可并行) → 18 → 19 → 20 → 21
 | 17. AgentMessage 语音扩展 | 1/1 | Complete    | 2026-05-04 |
 | 18. SendVoice 语音回复工具 | 1/1 | Complete    | 2026-05-05 |
 | 19. Discord 文字与语音消息 | 2/2 | Complete   | 2026-05-06 |
-| 20. Discord 语音频道实时流 | 2/1 | Complete   | 2026-05-06 |
-| 21. 基础设施与启动集成 | 0/? | Not started | - |
+| 20. Discord 语音频道实时流 | 2/2 | Complete    | 2026-05-06 |
+| 21. 基础设施与启动集成 | 0/1 | Not started | - |
 
 ---
-*Last updated: 2026-05-06*
+*Last updated: 2026-05-08*

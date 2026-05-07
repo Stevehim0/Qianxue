@@ -69,28 +69,31 @@ class MemoryAPI:
         self._stable_text: str = ""
         self._load_stable_text()
 
-        # 创建 Pipeline 实例，注入 ProfileManager 和稳定层
-        self.writer_pipeline = WriterPipeline(
-            profile_manager=self.profile_manager,
-            stable_text=self._stable_text,
-        )
-
-        # ConsolidationPipeline 注入 ProfileManager 和稳定层
-        self.consolidation_pipeline = ConsolidationPipeline(
-            profile_manager=self.profile_manager,
-            stable_text=self._stable_text,
-        )
-        self.state_manager = DefaultStateManager()
-
-        # 创建 RecallManager（注入 ProfileManager 和 LLM client）
-        # 根据配置创建 LLM 客户端
+        # 根据配置创建 LLM 客户端（必须在 Pipeline 之前创建）
         provider = settings.models.llm_provider or "qianwen"
         llm_kwargs = {}
+        if settings.models.llm_api_key:
+            llm_kwargs["api_key"] = settings.models.llm_api_key
         if provider == "openai_compatible" and settings.models.llm_base_url:
             llm_kwargs["base_url"] = settings.models.llm_base_url
             if settings.models.llm_model:
                 llm_kwargs["model"] = settings.models.llm_model
         self._llm_client = LLMFactory.create_client(provider=provider, **llm_kwargs)
+
+        # 创建 Pipeline 实例，注入 LLM 客户端、ProfileManager 和稳定层
+        self.writer_pipeline = WriterPipeline(
+            llm_client=self._llm_client,
+            profile_manager=self.profile_manager,
+            stable_text=self._stable_text,
+        )
+
+        # ConsolidationPipeline 注入 LLM 客户端、ProfileManager 和稳定层
+        self.consolidation_pipeline = ConsolidationPipeline(
+            llm_client=self._llm_client,
+            profile_manager=self.profile_manager,
+            stable_text=self._stable_text,
+        )
+        self.state_manager = DefaultStateManager()
         self.recall_manager = RecallManager(
             experience_store=experience_store,
             entity_store=entity_store,
@@ -511,11 +514,19 @@ class MemoryAPI:
                 },
             }
 
-        # 不存在，检查实体是否存在
+        # 不存在，检查实体是否存在，不存在则创建
         entity = self.profile_manager.entity_store.get_by_name(entity_name)
         if not entity:
-            logger.info(f"ensure_profile: 实体 {entity_name} 不存在，跳过")
-            return None
+            import uuid
+            from Memory.storage.entity_store import Entity
+            entity = Entity(
+                id=f"entity_{uuid.uuid4().hex[:12]}",
+                name=entity_name,
+                type="person",
+                properties={"relation_to_self": "unknown"},
+            )
+            self.profile_manager.entity_store.create(entity)
+            logger.info(f"ensure_profile: 已创建实体 {entity_name} ({entity.id})")
 
         # 创建档案
         from datetime import datetime
