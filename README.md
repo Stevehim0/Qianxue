@@ -1,20 +1,31 @@
 # Qianxue (千雪)
 
-千雪是一个拥有持久记忆和独立人格的 AI 伙伴。
+千雪是一个拥有持久记忆、独立人格、实时语音能力和工具调用能力的 AI 伙伴。
 
-大多数 AI 聊天产品每次对话都从零开始——它们不记得你昨天说了什么，不了解你关心什么，更不会主动找你说话。千雪不一样。
+---
 
-她会记住和你的每次对话。第二天找她，她还记得昨天聊了什么；一个月后，她比刚认识的时候更了解你。她在多个群聊之间感知上下文——A 群刚聊完的话题，B 群里提起她知道在说什么。安静的时候她会主动开口，深夜了她的精力和心情会变化，回复的风格也跟着不同。
+我设计千雪的初衷是希望她能像人一样"参与"，像人一样“回忆”。
 
-这不是靠一个"记忆"开关实现的，而是一套完整的认知架构：
+大多数人用过的 AI 聊天是这样的——每次对话从零开始，机械地回复每一条消息，说话像在写报告，隔天就忘了你是谁。千雪不是这样的。
 
-- **分层记忆**：记忆不是数据存储，而是自我的体验。主观体验和客观事实分开存储、独立演化，模拟人脑对"感受"和"知识"的不同处理方式。
+她会记住你们聊过的每一件事。第二天找她，她还记得昨天说了什么；一个月后，她比刚认识的时候更了解你。她同时存在于多个群聊中，是一个真正"参与"的人——A 群刚聊完的话题，B 群里提起她知道在说什么。没人在说话的时候她偶尔会主动开口，深夜了她的精力和心情会变化，回复的风格也跟着不同。千雪记得你是谁，和每个其他相处的方式也不同，人们不再是“用户”，而是一个个有名字的人，千雪的朋友。
+
+你甚至可以让她进入 Discord 语音频道里和在语音里畅谈。
+
+不过千雪也会累，她需要休息。她的记忆不是一个数据库，而是她对经历的主观感受。就像人一样，重要的事会留下深刻的印象，模糊的细节会慢慢褪色。她会定期"做梦"，把零散的经历压缩成核心印象，在不相关的记忆之间发现隐藏的关联，模糊掉不再重要的细节，强化反复出现的重要体验。 说不定，千雪也能梦见电子羊呢？
+
+这一切不是靠一个"记忆"开关实现的，而是一套完整的认知架构：
+
+- **流式实时回复**：不是等整段话生成完再发，而是边想边说，一句一句实时输出。被 @ 的时候秒回，普通消息等你说完再接话。不想回的消息她就不回——沉默也是聊天的一部分。
+- **人物画像**：每个人都是独特的。千雪对每个人都有一个画像，记录了她对这个人的感觉、印象、重要事件等。她对不同人的说话风格、话题兴趣也会不同。而这个画像也会根据你和千雪的互动而慢慢改变。
+- **分层记忆**：记忆不是数据存储，而是自我的体验。主观感受和客观事实分开存储、独立演化，模拟人脑对"感受"和"知识"的不同处理方式。
 - **梦境处理**：记忆不是只进不出。系统会定期像做梦一样重组记忆、发现隐藏关联、模糊不重要的细节，让记忆体系保持鲜活而不臃肿。
 - **人格演化**：她的性格不是写死的。三层人格架构中，核心底线不变，但风格、偏好、话题兴趣会随着真实交互持续演化。聊得越多，她越独特。
 - **情绪与节律**：心情、精力、注意力、信心——四个维度的状态真实地影响她的输出，不只是装饰。深夜她会变疲惫，连续高强度对话后会需要休息。
+- **语音对话**：连接 Discord 语音频道，实时语音交流。她说出的每句话都会即时合成语音并流式播放，就像在打电话一样自然。
 - **跨群感知**：短期记忆在所有群聊间共享。她在多群环境中是一个真正"在场"的人，而不是在每个群里都是一张白纸。
+- **多轮思考**：支持多轮对话和思考，能灵活调用工具，能够根据上下文进行深入分析和推理，直到问题解决或是不想说话了。
 
-**一句话：** 千雪试图回答一个问题——如果 AI 真的记得你，会发生什么？
 
 ## 目录
 
@@ -47,6 +58,9 @@
 
 | 能力 | 说明 |
 |------|------|
+| **流式实时回复** | 句子级别流式输出，边想边说，无需等待完整生成 |
+| **Discord 语音** | 连接语音频道实时语音对话，流式 TTS 合成播放 |
+| **@ 消息感知** | 识别群聊中 @ 的是谁，区分"在和我说话"与"在和别人说话" |
 | **AgentBrain 多轮思考** | LLM 自主决定思考轮次，并行调用工具，直到任务完成 |
 | **分层记忆系统** | L0 短期体验 → L1 摘要 → L2 核心记忆，带衰减与巩固 |
 | **人设演化** | 三层人格架构（不变层 / 稳定层 / 可塑层），随交互持续演化 |
@@ -61,16 +75,34 @@
 
 普通的 AI 聊天是一轮定胜负——收到消息，生成回复，结束。千雪不一样。她的 AgentBrain 会像人一样反复斟酌：先理解你在说什么，判断需要回忆哪些事、查阅哪些上下文，拿到信息后再重新思考，直到真正想清楚才开口。这个过程可能经过好几轮，中间她会并行翻阅记忆、检索上下文、甚至识别你发的图片——就像一个人一边翻聊天记录一边认真想怎么回复。
 
+### 流式实时回复
+
+千雪的回复是流式的——她边想边说，不需要等整段话生成完毕。句子级别的实时检测让她像真人一样一句一句地发出来，而不是憋半天然后丢出一大段。
+
+消息处理也有优先级：被 @ 的消息跳过等待立即处理，普通消息会聚合等你说完再一起给 AI。AI 还可以选择不回复——不是每条消息都需要接话，沉默也是正常的聊天行为。
+
+### Discord 语音频道
+
+千雪可以连接 Discord 语音频道进行实时语音对话。连接后，她说出的每句话都会实时合成语音（Edge TTS）并流式播放到频道中，不需要等整段语音生成完毕。支持自动重连、被踢出后恢复等机制。
+
 ### 记忆系统
 
-千雪对记忆的理解不是"把数据存下来"，而是**记忆是自我的体验**。人不会记住对话的每个字，但会记住那次聊天带给自己的感受、和对方说了什么重要的事、对某个人形成了什么印象。千雪的记忆系统模拟的就是这个过程。
+千雪对记忆的理解不是"把对话存进数据库"，而是**记忆是自我的体验**。
 
-存储层被设计为**体验层**和**信息层**两个平行轨道：
+你回忆昨天和朋友的一场聊天，你不会记得对方说的每一个字，但你记得那次聊天让你很开心，记得他提了一句下周要搬家，记得你对这个人又多了一点了解——他最近压力很大。千雪的记忆系统模拟的就是这个过程：不记录对话本身，而是记录**对话带来的改变**。
 
-- **体验层**：记录"经历了什么"——一次对话带来了什么感受，对谁产生了什么印象。这些记忆是主观的、模糊的，会随时间衰减和变形，就像人对往事的回忆。
-- **信息层**：记录"知道了什么"——事实性的信息，比如某人的生日、某个技术问题的答案。这些记忆是客观的、稳定的，不会因为时间推移而模糊。
+这套系统由三个层次构成：
 
-两个轨道在巩固过程中独立演化，但在召回时合并为统一的记忆简报。随时间推移，不重要的体验会自然消退，重要的则被反复强化。全量巩固时还会触发**梦境处理**——对记忆进行重组、情感加工和模拟推演，在看似无关的记忆之间发现隐藏的关联。
+**短期记忆（感知层）** — 千雪此刻的"意识"。最近几个小时谁说了什么、聊了什么话题、她自己的情绪状态——这些构成了她对当下环境的实时感知。就像你走进一个房间，能感受到气氛是热闹还是安静。
+
+**体验层与信息层（双轨存储）** — 千雪的"长期记忆"。所有经历被分成两条独立的轨道：
+
+- **体验层**记录"经历了什么"——一次深夜长谈带来的亲近感，一次玩笑争执后的小别扭，对某个人逐渐形成的直觉印象。这些记忆是主观的、有温度的，会随时间自然褪色和变形，就像人对往事的回忆越来越模糊，但核心感受还在。
+- **信息层**记录"知道了什么"——某人的生日、他养的猫叫什么名字、他最近在准备什么考试。这些记忆是客观的、稳定的，不会因为时间推移而模糊。
+
+两条轨道独立演化，但在千雪需要回忆的时候合并为统一的记忆简报——既有事实，也有感受，就像你想起一个朋友时，脑海中同时浮现出他的样子和你们之间的故事。
+
+**梦境处理（巩固层）** — 千雪的"睡眠"。系统会定期像做梦一样对记忆进行整理：把零散的体验压缩成核心印象，在不相关的记忆之间发现隐藏的关联，模糊掉不再重要的细节，强化反复出现的重要体验。这个过程和人类的睡眠巩固机制类似——你不记得每天发生的事，但你会记住那些真正改变了你的瞬间。
 
 ### 人格与情绪
 
@@ -80,7 +112,7 @@
 
 ### 跨群感知
 
-大多数机器人在每个群里都是孤立的，千雪不是。她的短期记忆在所有群聊之间共享——A 群刚聊完的话题，B 群里提起她知道在说什么；在某个群里认识的人，换个群她还记得。这让她在多群环境中表现得像一个真正"在场"的人，而不是同时存在于 N 个群里的 N 个陌生人。
+大多数机器人在每个群里都是孤立的，千雪不是。她的短期记忆在所有群聊之间共享——A 群刚聊完的话题，B 群里提起她知道在说什么；在某个群里认识的人，换个群她还记得。这让她在多群环境中表现得像一个真正"在场"的人，而不是同时存在于 N 个群里的 N 个陌生人。当然，私聊也可以。
 
 ## 前置要求
 
@@ -172,39 +204,54 @@ python -m heartbeat                               # 终端 3: 心跳服务
 
 ```
 QQ 用户 ─→ NapCat (OneBot v11) ──WebSocket──→ Backend (FastAPI :8000)
-                                                  │
-                                          AgentBrain 多轮思考
-                                          └─ LLM: 推理 + 工具规划 + 回复生成
-                                                  │
-                                          工具系统 (可扩展)
-                                          ├─ send_message      发送消息
-                                          ├─ search_memory     搜索记忆
-                                          ├─ get_context       获取上下文
-                                          ├─ recognize_image   图片识别
-                                          └─ get_current_time  获取时间
-                                                  │
-                                          Memory 服务 (独立进程 :8001)
-                                          ├─ 写入管道: 体验提取 → 实体识别
-                                          ├─ 巩固管道: L0 → L1 → L2 + 梦境
-                                          └─ 召回管道: 向量检索 + 图谱遍历
-                                                  │
-                                          Heartbeat 服务
-                                          └─ 定时触发 AI 主动思考
+Discord 用户 ─→ Discord Bot ───────────────→        │
+                                                      │
+                                              AgentBrain 多轮思考
+                                              ├─ 流式路径: 句子级实时输出 + 工具调用
+                                              └─ Think Loop: JSON 格式多轮推理 (fallback)
+                                                      │
+                                              工具系统 (可扩展)
+                                              ├─ send_message      发送消息
+                                              ├─ search_memory     搜索记忆
+                                              ├─ get_context       获取上下文
+                                              ├─ recognize_image   图片识别
+                                              ├─ send_voice        语音回复
+                                              ├─ connect/discord   连接 Discord
+                                              ├─ connect/voice     连接语音频道
+                                              └─ get_current_time  获取时间
+                                                      │
+                                              MessageManager (统一消息路由)
+                                              ├─ QQ 群聊 / 私聊
+                                              ├─ Discord 文字频道 / 私聊
+                                              └─ Discord 语音频道 (TTS 流式播放)
+                                                      │
+                                              Memory 服务 (独立进程 :8001)
+                                              ├─ 写入管道: 体验提取 → 实体识别
+                                              ├─ 巩固管道: L0 → L1 → L2 + 梦境
+                                              └─ 召回管道: 向量检索 + 图谱遍历
+                                                      │
+                                              Heartbeat 服务
+                                              └─ 定时触发 AI 主动思考
 ```
 
 ### 消息处理流程
 
 ```
 QQ 消息 → NapCat → WebSocket → Backend
-  → QQSource 解析 → AgentMessage
+Discord 消息 → Discord Bot → Backend
+  → QQSource / DiscordSource 解析 → AgentMessage
+    ├─ @ 消息识别: <@id> → @名字, 标记 is_mentioned
+    └─ 语音附件: 下载 → FunASR/Whisper 转写
   → Context Manager 存储上下文
-  → STM 事件记录（@消息 / 长消息 / 私聊）
-  → Debounce 合并（等 3s）
-  → AgentBrain 多轮思考:
-      第 1 轮: LLM 分析 + 规划工具调用
-      第 2 轮: 执行工具 + LLM 分析结果
-      ... (最多 N 轮)
-  → NapCat 发送回复
+  → STM 事件记录
+  → Debounce 分流:
+      @ 消息 → 跳过等待立即处理
+      普通消息 → 聚合等待（等对方说完）
+  → AgentBrain 流式回复:
+      SentenceDetector 句子级拆分
+      → MessageManager 实时发送每个句子
+      → 工具调用 (search_memory / send_voice 等)
+      → AI 可选择沉默（不输出内容）
 ```
 
 ### 记忆系统管道
@@ -229,12 +276,20 @@ qianxue/
 │   │   └── napcat.py           # NapCat OneBot HTTP 客户端
 │   ├── services/
 │   │   ├── agent/
-│   │   │   ├── brain.py        # AgentBrain 多轮思考引擎
+│   │   │   ├── brain.py        # AgentBrain 思考引擎（流式 + Think Loop 双路径）
 │   │   │   ├── message.py      # AgentMessage 统一消息模型
 │   │   │   ├── thought.py      # AgentThought 思考过程模型
-│   │   │   ├── tools/          # 工具注册表（可扩展）
-│   │   │   └── sources/        # 消息源（QQ 等）
+│   │   │   ├── tools/          # 工具注册表（含 Discord/语音工具）
+│   │   │   ├── streaming/      # 流式回复系统
+│   │   │   │   ├── streaming_prompt.py  # 流式 system prompt 构建器
+│   │   │   │   ├── sentence_detector.py # 句子边界检测器
+│   │   │   │   └── message_manager.py   # 统一消息路由（QQ/Discord/TTS）
+│   │   │   └── sources/        # 消息源
+│   │   │       ├── qq_source.py       # QQ (NapCat) 消息源
+│   │   │       └── discord_source.py  # Discord 消息源 + 语音附件处理
 │   │   ├── context_manager.py  # 对话上下文管理
+│   │   ├── voice_service.py    # 语音合成服务 (Edge TTS)
+│   │   ├── voice_player.py     # 语音播放器 (Discord 语音频道流式播放)
 │   │   ├── sleep_manager.py    # 睡眠节律管理
 │   │   ├── vision_service.py   # 图片识别服务
 │   │   ├── memory_interface.py # 记忆系统接口
@@ -354,16 +409,19 @@ qianxue/
 
 | 位置 | 符号 | 说明 |
 |------|------|------|
-| `backend/services/agent/brain.py` | `AgentBrain` | 多轮思考引擎，核心推理循环 |
+| `backend/services/agent/brain.py` | `AgentBrain` | 思考引擎（流式 + Think Loop 双路径） |
+| `backend/services/agent/brain.py` | `_stream_reply()` | 流式回复 — 句子级实时输出 + 工具调用循环 |
 | `backend/services/agent/brain.py` | `proactive_think()` | 心跳触发的主动思考入口 |
-| `backend/services/agent/message.py` | `AgentMessage` | 统一消息模型（含 is_private/is_heartbeat） |
-| `backend/services/agent/message.py` | `create_heartbeat()` | 创建心跳虚拟消息 |
-| `backend/api/llm.py` | `LLMManager` | LLM 提供者管理（thinking_provider） |
-| `backend/api/llm.py` | `OpenAIProvider` / `AnthropicProvider` / `DeepSeekProvider` / `QwenProvider` | 四种 Provider 实现 |
-| `backend/routes/config_routes.py` | `create_provider()` | 根据 URL/名称自动创建对应 Provider |
-| `backend/config/loader.py` | `ConfigLoader` | 统一配置加载（YAML + 环境变量） |
-| `backend/config/loader.py` | `save_thinking_provider()` | 思考模型持久化写回 llm.yaml |
-| `backend/web/app.py` | Flask 应用 | 管理前端（代理 Backend + Memory API） |
+| `backend/services/agent/streaming/sentence_detector.py` | `SentenceDetector` | 流式句子边界检测（。！？\n.!?） |
+| `backend/services/agent/streaming/message_manager.py` | `MessageManager` | 统一消息路由（QQ/Discord/TTS） |
+| `backend/services/agent/streaming/streaming_prompt.py` | `build_streaming_prompt()` | 流式路径 system prompt 构建器 |
+| `backend/services/agent/sources/discord_source.py` | `DiscordSource` | Discord 消息源 + @ 转换 + 语音附件处理 |
+| `backend/services/voice_player.py` | `VoicePlayer` | Discord 语音频道流式播放器 |
+| `backend/services/voice_service.py` | `VoiceService` | 语音合成 + 语音转写服务 |
+| `backend/services/agent/message.py` | `AgentMessage` | 统一消息模型（含 is_private/is_mentioned） |
+| `backend/api/llm.py` | `LLMManager` | LLM 提供者管理 + 流式 stream_chat |
+| `backend/api/napcat.py` | `extract_plain_text()` | QQ 消息文本提取（保留 @ 名字） |
+| `backend/main.py` | `_enqueue_message()` | 消息入队分流（@ 立即处理 / 普通 debounce） |
 | `backend/services/context_manager.py` | `ContextManager` | 对话上下文存储与检索 |
 | `backend/services/sleep_manager.py` | `SleepManager` | 睡眠节律 + 精力管理 |
 | `Memory/api/memory_api.py` | `MemoryAPI` | 记忆系统统一 API 入口 |
@@ -385,6 +443,9 @@ qianxue/
 | Embedding | BAAI/bge-base-zh (sentence-transformers) |
 | LLM | OpenAI 兼容 API (多 Provider，前端预设配置) |
 | QQ 协议 | OneBot v11 (NapCat) |
+| Discord | discord.py (Bot + 语音频道) |
+| 语音合成 | Edge TTS (流式合成) |
+| 语音转写 | FunASR (Docker) / Whisper API |
 | Web UI | Flask + 原生 HTML/CSS/JS |
 | 数据库 | SQLite (aiosqlite) |
 
