@@ -405,6 +405,74 @@ class VoicePlayer:
         self._play_next_chunk()
 
     # ------------------------------------------------------------------
+    # 流式播放
+    # ------------------------------------------------------------------
+
+    async def play_streaming(self, sentence_queue: asyncio.Queue) -> None:
+        """从 asyncio.Queue 消费 MP3 bytes，逐个播放。
+
+        用于流式 TTS 管道：SentenceDetector 输出完整句子 → TTS 合成 →
+        MP3 放入 queue → 本方法从 queue 取出播放。
+
+        Queue 约定:
+        - bytes: 一句话的 MP3 音频
+        - None: 结束哨兵
+        """
+        if not self._connected or not self._voice_client:
+            logger.warning("VoicePlayer.play_streaming: 未连接，跳过")
+            # 排空队列防止生产者阻塞
+            while not sentence_queue.empty():
+                try:
+                    sentence_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+            return
+
+        self._is_playing = True
+        self._interrupted = False
+
+        while not self._interrupted:
+            try:
+                item = await asyncio.wait_for(sentence_queue.get(), timeout=300.0)
+            except asyncio.TimeoutError:
+                logger.warning("VoicePlayer.play_streaming: 等待超时")
+                break
+
+            if item is None:
+                break
+
+            if self._interrupted:
+                break
+
+            try:
+                bio = io.BytesIO(item)
+                source = discord.FFmpegOpusAudio(bio, pipe=True)
+
+                # 用 Future 等待播放完成
+                done_event = asyncio.Event()
+
+                def _after(error):
+                    if error:
+                        logger.error(f"VoicePlayer.play_streaming chunk error: {error}")
+                    try:
+                        loop = self._voice_client.client.loop
+                        loop.call_soon_threadsafe(done_event.set)
+                    except Exception:
+                        pass
+
+                self._voice_client.play(source, after=_after)
+                try:
+                    await asyncio.wait_for(done_event.wait(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    logger.warning("VoicePlayer.play_streaming: 播放等待超时，继续下一块")
+            except Exception as e:
+                logger.error(f"VoicePlayer.play_streaming: 播放失败: {e}")
+                break
+
+        self._is_playing = False
+        logger.info("VoicePlayer.play_streaming: 播放结束")
+
+    # ------------------------------------------------------------------
     # 打断机制
     # ------------------------------------------------------------------
 

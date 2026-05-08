@@ -1,9 +1,10 @@
 """大模型API封装模块."""
 
 import httpx
+import json
 import logging
 from backend.config import settings
-from typing import List, Dict, Optional
+from typing import AsyncGenerator, List, Dict, Optional
 from abc import ABC, abstractmethod
 
 
@@ -29,6 +30,24 @@ class LLMProvider(ABC):
     async def test_connection(self) -> bool:
         """测试API连接"""
         pass
+
+    async def stream_chat(
+        self,
+        messages: List[Dict],
+        system_prompt: Optional[str] = None,
+        tools: Optional[List[Dict]] = None,
+    ) -> AsyncGenerator[Dict, None]:
+        """流式聊天 — 默认 fallback 到非流式。
+
+        子类可覆盖此方法以提供真正的流式支持。
+        Yield 结构化事件：
+            {"type": "content", "delta": "token"}
+            {"type": "tool_call_delta", "delta": [...]}
+            {"type": "done", "reason": "tool_calls" | None}
+        """
+        response = await self.chat(messages, system_prompt)
+        yield {"type": "content", "delta": response}
+        yield {"type": "done", "reason": None}
 
     async def close(self):
         """关闭HTTP客户端"""
@@ -187,6 +206,106 @@ class DeepSeekProvider(LLMProvider):
             logger.error(f"DeepSeek API调用失败: {e}")
             raise
 
+    async def stream_chat(
+        self,
+        messages: List[Dict],
+        system_prompt: Optional[str] = None,
+        tools: Optional[List[Dict]] = None,
+    ) -> AsyncGenerator[Dict, None]:
+        """DeepSeek 流式聊天 — OpenAI 兼容 SSE 格式."""
+        if system_prompt:
+            messages = [{"role": "system", "content": system_prompt}] + messages
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data: Dict = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+        }
+        if tools:
+            data["tools"] = tools
+
+        tool_calls_accum: Dict[int, Dict] = {}
+
+        try:
+            async with self.client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                json=data,
+                headers=headers,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    payload = line[6:].strip()
+                    if payload == "[DONE]":
+                        reason = "tool_calls" if tool_calls_accum else None
+                        yield {"type": "done", "reason": reason}
+                        return
+
+                    try:
+                        chunk = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+
+                    delta = choices[0].get("delta", {})
+                    finish_reason = choices[0].get("finish_reason")
+
+                    # 文字内容
+                    content = delta.get("content")
+                    if content:
+                        yield {"type": "content", "delta": content}
+
+                    # 工具调用片段
+                    tc_deltas = delta.get("tool_calls")
+                    if tc_deltas:
+                        for tc in tc_deltas:
+                            idx = tc.get("index", 0)
+                            if idx not in tool_calls_accum:
+                                tool_calls_accum[idx] = {
+                                    "id": tc.get("id", ""),
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""},
+                                }
+                            entry = tool_calls_accum[idx]
+                            if tc.get("id"):
+                                entry["id"] = tc["id"]
+                            fn = tc.get("function", {})
+                            if fn.get("name"):
+                                entry["function"]["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                entry["function"]["arguments"] += fn["arguments"]
+
+                        yield {
+                            "type": "tool_call_delta",
+                            "delta": [tool_calls_accum[i] for i in sorted(tool_calls_accum)],
+                        }
+
+                    # finish_reason 兜底
+                    if finish_reason == "tool_calls":
+                        yield {"type": "done", "reason": "tool_calls"}
+                        return
+                    elif finish_reason in ("stop", "length"):
+                        yield {"type": "done", "reason": "tool_calls" if tool_calls_accum else None}
+                        return
+
+            # 流结束但没收到 [DONE]
+            reason = "tool_calls" if tool_calls_accum else None
+            yield {"type": "done", "reason": reason}
+
+        except Exception as e:
+            logger.error(f"DeepSeek 流式调用失败: {e}")
+            raise
+
     async def test_connection(self) -> bool:
         """测试DeepSeek API连接"""
         try:
@@ -326,6 +445,22 @@ class LLMManager:
             else:
                 raise ValueError("未设置思考模型提供者")
         return await provider.chat(messages, system_prompt)
+
+    async def stream_chat(
+        self,
+        messages: List[Dict],
+        system_prompt: Optional[str] = None,
+        tools: Optional[List[Dict]] = None,
+    ) -> AsyncGenerator[Dict, None]:
+        """使用思考模型进行流式推理"""
+        provider = self._thinking_provider
+        if not provider:
+            if self._current_provider_name and self._current_provider_name in self._providers:
+                provider = self._providers[self._current_provider_name]
+            else:
+                raise ValueError("未设置思考模型提供者")
+        async for event in provider.stream_chat(messages, system_prompt, tools):
+            yield event
 
     async def test_provider(self, name: str) -> bool:
         """测试指定的API提供者"""

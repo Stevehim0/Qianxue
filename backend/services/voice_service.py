@@ -307,6 +307,23 @@ class VoiceService:
                 buffer.write(chunk["data"])
         return buffer.getvalue()
 
+    async def synthesize_stream(self, sentences: list[str], voice: Optional[str] = None) -> list[bytes]:
+        """流式 TTS — 逐句合成 MP3，返回句子级音频列表。
+
+        与 synthesize() 不同，这里每个句子独立合成，用于流式播放管道。
+        句子 N 播放时，调用方可提前开始合成句子 N+1（流水线并行）。
+        """
+        results = []
+        for sentence in sentences:
+            if not sentence.strip():
+                continue
+            try:
+                mp3 = await self.synthesize(sentence, voice)
+                results.append(mp3)
+            except VoiceError as e:
+                logger.warning(f"流式TTS跳过句子: {sentence[:30]}... 错误: {e}")
+        return results
+
 
 # 模块级单例
 voice_service = VoiceService()

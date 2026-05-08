@@ -1,8 +1,8 @@
 """Agent大脑 - 主思考引擎."""
 
-import logging
-import asyncio
 import json
+import asyncio
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -85,11 +85,20 @@ class AgentBrain:
         """
         logger.info(f"AgentBrain开始处理消息: group={message.group_id}, user={message.user_id}")
 
-        # 每条消息都独立思考，不使用缓存
-        # 因为每条消息的内容都不同，复用思考结果会导致错误回复
-        thought = await self._think_loop(message)
+        # 心跳/图片消息走原有 think loop
+        if message.is_heartbeat or message.has_image:
+            return await self._think_loop(message)
 
-        return thought
+        # 流式路径
+        if settings.brain.streaming_enabled:
+            try:
+                return await self._stream_reply(message)
+            except Exception as e:
+                logger.error(f"流式回复失败: {e}", exc_info=True)
+                raise
+
+        # 流式关闭时退回 think loop
+        return await self._think_loop(message)
 
     async def _think_loop(self, message: AgentMessage) -> AgentThought:
         """
@@ -791,6 +800,217 @@ class AgentBrain:
             logger.info("中间消息已发送: " + text)
         except Exception as e:
             logger.warning("中间消息发送失败（非关键）: " + str(e))
+
+    # ------------------------------------------------------------------
+    # 流式回复路径
+    # ------------------------------------------------------------------
+
+    async def _stream_reply(self, message: AgentMessage) -> AgentThought:
+        """流式回复 — 文字和工具调用并行收集，多轮流式循环。"""
+        from .streaming.sentence_detector import SentenceDetector
+        from .streaming.streaming_prompt import build_streaming_prompt, build_api_tools
+        from .streaming.message_manager import message_manager
+
+        thought = AgentThought()
+        full_reply_parts: list[str] = []
+        all_tool_results: Dict[str, Any] = {}
+
+        # 构建流式 system prompt
+        stm_perception_text, energy_label, mood_label = await self._fetch_context_state()
+        system_prompt = build_streaming_prompt(
+            identity=identity_loader.identity,
+            is_private=message.is_private,
+            stm_perception=stm_perception_text,
+            energy_label=energy_label,
+            mood_label=mood_label,
+        )
+
+        # 构建 API tools
+        api_tools = build_api_tools(self.tool_registry)
+
+        # 构建用户消息
+        user_content = await self._build_user_message_with_context(message)
+        messages = [{"role": "user", "content": user_content}]
+
+        # 语音频道：启动 TTS 管道
+        voice_queue: Optional[asyncio.Queue] = None
+        voice_task = None
+        if message.group_id.startswith("voice_"):
+            voice_queue = asyncio.Queue()
+            message_manager.set_voice_sentence_queue(voice_queue)
+            from backend.services.voice_player import voice_player
+            voice_task = asyncio.create_task(voice_player.play_streaming(voice_queue))
+
+        try:
+            for iteration in range(self.max_iterations):
+                thought.iteration = iteration + 1
+                logger.info(f"流式轮次 {iteration + 1}/{self.max_iterations}")
+
+                detector = SentenceDetector()
+                collected_text = ""
+                collected_tool_calls: list[dict] = []
+                last_tool_delta: list[dict] = []
+                has_tool_calls = False
+
+                async for event in llm_manager.stream_chat(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                    tools=api_tools if api_tools else None,
+                ):
+                    event_type = event["type"]
+
+                    if event_type == "content":
+                        token = event["delta"]
+                        collected_text += token
+                        sentences = detector.feed(token)
+                        for sentence in sentences:
+                            await message_manager.send_sentence(message, sentence)
+                            full_reply_parts.append(sentence)
+
+                    elif event_type == "tool_call_delta":
+                        has_tool_calls = True
+                        last_tool_delta = event["delta"]
+
+                    elif event_type == "done":
+                        # flush 剩余文字
+                        for sentence in detector.flush():
+                            await message_manager.send_sentence(message, sentence)
+                            full_reply_parts.append(sentence)
+
+                        if event.get("reason") == "tool_calls" or has_tool_calls:
+                            collected_tool_calls = self._convert_api_tool_calls(last_tool_delta)
+
+                if not collected_tool_calls:
+                    # 没有工具调用，完成
+                    thought.status = ThoughtStatus.COMPLETE
+                    break
+
+                # 执行工具
+                logger.info(f"流式路径: 执行 {len(collected_tool_calls)} 个工具调用")
+                tool_call_objs = self._create_tool_calls(collected_tool_calls, message, all_tool_results)
+                execution_results = await self._execute_tools(tool_call_objs, message, all_tool_results)
+
+                # 更新结果映射
+                for call in tool_call_objs:
+                    if call.tool_id in execution_results:
+                        all_tool_results[call.tool_id] = execution_results[call.tool_id]
+
+                # 将工具结果喂回消息，继续下一轮流式
+                assistant_content = collected_text or ""
+                tool_results_content = self._format_tool_results(execution_results)
+                messages.append({"role": "assistant", "content": assistant_content})
+                messages.append({
+                    "role": "user",
+                    "content": f"工具执行结果:\n{tool_results_content}\n\n请根据结果继续回复。如果不需要更多工具，直接回复即可。",
+                })
+
+            # 达到最大轮次
+            if thought.status != ThoughtStatus.COMPLETE:
+                logger.warning(f"流式路径达到最大轮次 {self.max_iterations}")
+                thought.status = ThoughtStatus.COMPLETE
+
+        finally:
+            # 结束语音管道
+            if voice_queue is not None:
+                await voice_queue.put(None)
+            if voice_task is not None:
+                try:
+                    await voice_task
+                except Exception:
+                    pass
+
+        # 存储上下文和记忆
+        if full_reply_parts:
+            await self._store_streaming_reply(message, full_reply_parts)
+
+        return thought
+
+    def _convert_api_tool_calls(self, delta_list: list[dict]) -> list[dict]:
+        """将 API 格式的工具调用 delta 转为内部格式。
+
+        delta_list 是 stream_chat() 最后一次 tool_call_delta 事件的累积结果，
+        结构为 [{id, type, function: {name, arguments}}, ...]。
+        """
+        results = []
+        for i, tc in enumerate(delta_list):
+            fn = tc.get("function", {})
+            arguments = {}
+            if fn.get("arguments"):
+                try:
+                    arguments = json.loads(fn["arguments"])
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {"raw": fn["arguments"]}
+
+            results.append({
+                "id": tc.get("id", f"call_{i}"),
+                "tool_name": fn.get("name", ""),
+                "arguments": arguments,
+            })
+        return results
+
+    async def _store_streaming_reply(self, message: AgentMessage, reply_parts: list[str]) -> None:
+        """存储流式回复的上下文和记忆。"""
+        from backend.services.context_manager import context_manager
+
+        full_reply = "".join(reply_parts)
+        if not full_reply.strip():
+            return
+
+        # 确定参数
+        if message.source == "discord":
+            user_id = "robot"
+            if message.group_id.startswith("dm_"):
+                source_type = "discord_private"
+            elif message.group_id.startswith("voice_"):
+                source_type = "voice_channel"
+            else:
+                source_type = "discord_channel"
+        else:
+            user_id = str(napcat_client.self_id)
+            source_type = "qq_private" if message.is_private else "qq_group"
+
+        # 上下文存储
+        try:
+            await context_manager.add_group_message(
+                group_id=message.group_id,
+                user_id=user_id,
+                role="assistant",
+                content=full_reply,
+                sender_nickname="机器人",
+                mentions=[],
+                is_directed_at_bot=False,
+            )
+        except Exception as e:
+            logger.warning(f"流式回复上下文存储失败: {e}")
+
+        # 记忆提取（fire-and-forget）
+        try:
+            import backend.services.memory_interface as mem_mod
+            asyncio.create_task(
+                mem_mod.memory_provider.extract_and_store(
+                    group_id=message.group_id,
+                    user_id=user_id,
+                    content=full_reply,
+                    role="assistant",
+                    speaker="千雪",
+                    source_type=source_type,
+                )
+            )
+        except Exception:
+            pass
+
+        # STM 事件（fire-and-forget）
+        try:
+            from backend.services.stm_client import stm_client
+            asyncio.create_task(stm_client.record_event(
+                event_type="ai_reply",
+                source_type=source_type,
+                group_id=message.group_id,
+                summary=f"你回复了: {full_reply[:60]}",
+                importance=0.6,
+            ))
+        except Exception:
+            pass
 
     _last_proactive_speak: Dict[str, datetime] = {}
     _proactive_speak_count: int = 0

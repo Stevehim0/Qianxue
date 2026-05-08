@@ -102,6 +102,8 @@ class BrainConfig:
     stm_importance_user_mention: float = 0.7
     stm_importance_significant_msg: float = 0.4
     stm_importance_private_chat: float = 0.8
+    streaming_enabled: bool = True
+    streaming_sentence_min_length: int = 2
 
 
 @dataclass
@@ -395,6 +397,8 @@ class ConfigLoader:
             stm_importance_user_mention=stm.get("user_mention", 0.7),
             stm_importance_significant_msg=stm.get("significant_msg", 0.4),
             stm_importance_private_chat=stm.get("private_chat", 0.8),
+            streaming_enabled=r.get("streaming", {}).get("enabled", True),
+            streaming_sentence_min_length=r.get("streaming", {}).get("sentence_min_length", 2),
         )
 
     def _build_sleep(self) -> SleepConfig:
