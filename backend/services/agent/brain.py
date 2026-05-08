@@ -112,7 +112,6 @@ class AgentBrain:
         """
         thought = AgentThought()
         previous_results = {}
-        interim_sent = False  # 每次思考最多发一条中间消息
 
         for iteration in range(self.max_iterations):
             thought.iteration = iteration + 1
@@ -146,30 +145,6 @@ class AgentBrain:
                 thought.status = ThoughtStatus.COMPLETE
                 logger.info("LLM未规划任何工具调用，思考完成")
                 break
-
-            # 第3.5步：中间回复——耗时工具执行前提示用户
-            # 快速工具（get_time, get_context）不需要 interim，避免简单对话显得不自然
-            FAST_TOOLS = set(settings.brain.fast_tools)
-            called_tool_names = {tc.get("tool_name") for tc in tool_calls}
-            has_slow_tool = bool(called_tool_names - FAST_TOOLS - {"send_message"})
-            has_send = any(tc.get("tool_name") == "send_message" for tc in tool_calls)
-            has_voice = any(tc.get("tool_name") == "send_voice" for tc in tool_calls)
-
-            interim_msg = llm_response.get("interim_message", "")
-
-            # 模型显式提供了 interim_message
-            if interim_msg and tool_calls and not llm_response.get("done") and not interim_sent and not has_voice:
-                interim_sent = True
-                logger.info(f"发送中间消息: {interim_msg[:50]}")
-                asyncio.create_task(self._send_interim_message(message, interim_msg))
-            # 仅当调了耗时工具且没有 send_message 且没有 send_voice 时，自动发一条
-            elif has_slow_tool and not has_send and not interim_sent and not has_voice:
-                interim_sent = True
-                import random
-                auto_msgs = settings.brain.interim_messages
-                auto_msg = random.choice(auto_msgs)
-                logger.info(f"自动发送中间消息: {auto_msg}")
-                asyncio.create_task(self._send_interim_message(message, auto_msg))
 
             # 第4步：创建 ToolCall 对象
             tool_call_objs = self._create_tool_calls(tool_calls, message, previous_results)
@@ -437,6 +412,15 @@ class AgentBrain:
         profile_text = await self._load_profile_text(message.user_id)
         if profile_text:
             header += "\n\n关于对方:\n" + profile_text
+
+        # 群聊中展示 @ 信息
+        if not message.is_private and message.mentions:
+            bot_name = "千雪"
+            mentioned_names = [m.get("name", "") for m in message.mentions if m.get("name")]
+            if message.is_mentioned:
+                header += f"\n这条消息是 @你（{bot_name}）的"
+            elif mentioned_names:
+                header += f"\n这条消息是 @{'、'.join(mentioned_names)} 的，不是 @你（{bot_name}）的"
 
         content = message.content
         # 有真实图片描述时，去掉 NapCat 附带的 [图片] 占位文本
@@ -827,6 +811,7 @@ class AgentBrain:
 
         # 构建 API tools
         api_tools = build_api_tools(self.tool_registry)
+        logger.info(f"流式路径 API tools: {[t['function']['name'] for t in api_tools]}")
 
         # 构建用户消息
         user_content = await self._build_user_message_with_context(message)

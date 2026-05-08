@@ -166,18 +166,26 @@ class NapCatClient:
         return ""
 
     def extract_plain_text(self, message: List[MessageSegment] | str | list) -> str:
-        """提取纯文本，去除CQ码"""
+        """提取纯文本，将@转为可读格式，去除其他CQ码"""
         if isinstance(message, str):
-            # 移除CQ码
             import re
-            return re.sub(r'\[CQ:.*?\]', '', message)
+            # 先把 [CQ:at,qq=xxx,name=yyy] 转为 @yyy
+            text = re.sub(r'\[CQ:at,qq=\d+,name=([^\]]+)\]', r'@\1', message)
+            text = re.sub(r'\[CQ:at,qq=(\d+)\]', lambda m: f'@用户{m.group(1)[-4:]}', text)
+            # 移除其余CQ码
+            return re.sub(r'\[CQ:.*?\]', '', text)
 
         if isinstance(message, list):
             text_parts = []
             for segment in message:
                 if isinstance(segment, dict):
-                    if segment.get("type") == "text":
+                    seg_type = segment.get("type")
+                    if seg_type == "text":
                         text_parts.append(segment.get("data", {}).get("text", ""))
+                    elif seg_type == "at":
+                        data = segment.get("data", {})
+                        name = data.get("name") or f"用户{str(data.get('qq', ''))[-4:]}"
+                        text_parts.append(f"@{name}")
                 elif isinstance(segment, str):
                     import re
                     text_parts.append(re.sub(r'\[CQ:.*?\]', '', segment))

@@ -339,7 +339,7 @@ def create_provider(name: str, api_key: str, base_url: str, model: str):
         return OpenAIProvider(api_key, base_url, model)
     elif "anthropic" in name_lower or "claude" in name_lower:
         return AnthropicProvider(api_key, base_url, model)
-    elif "deepseek" in name_lower:
+    elif "deepseek" in name_lower or "deepseek" in url_lower:
         return DeepSeekProvider(api_key, base_url, model)
     elif "qwen" in name_lower or "aliyun" in name_lower or "dashscope" in url_lower:
         return QwenProvider(api_key, base_url, model)

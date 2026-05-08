@@ -1,6 +1,14 @@
 """QQ聊天AI机器人主应用."""
 
 import os
+
+# 清除代理设置，防止 httpx/requests 通过环境变量或 Windows 注册表走系统代理。
+# Discord 的代理由 discord.yaml 的 proxy 字段独立控制，不受影响。
+for _v in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+    os.environ.pop(_v, None)
+import urllib.request
+urllib.request.getproxies = lambda: {}
+
 import logging
 import json
 from contextlib import asynccontextmanager
@@ -35,6 +43,8 @@ from backend.services.agent.tools.get_context import GetConversationContextTool
 from backend.services.agent.tools.send_voice import SendVoiceTool
 from backend.services.agent.tools.connect_discord import ConnectDiscordTool
 from backend.services.agent.tools.disconnect_discord import DisconnectDiscordTool
+from backend.services.agent.tools.reconnect_voice import ReconnectVoiceTool
+from backend.services.agent.tools.disconnect_voice import DisconnectVoiceTool
 from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
 from backend.services.heartbeat_manager import heartbeat_manager
 from backend.services.voice_service import voice_service
@@ -106,6 +116,52 @@ async def _ensure_robot_user():
         logger.warning(f"创建机器人用户记录失败: {e}")
 
 
+_shutdown_done = False
+
+
+async def _graceful_shutdown():
+    """优雅关闭 — 断开所有外部连接。lifespan 和 /api/core/shutdown 共用。"""
+    global _shutdown_done
+    if _shutdown_done:
+        return
+    _shutdown_done = True
+
+    logger.info("正在关闭应用...")
+
+    # 取消所有 debounce 定时器
+    for key, state in _debounce_state.items():
+        if state.get("timer") is not None:
+            state["timer"].cancel()
+    _debounce_state.clear()
+
+    # 断开 Discord 语音频道连接
+    if voice_player.is_connected():
+        await voice_player.disconnect()
+        logger.info("VoicePlayer 已断开")
+
+    # 断开 Discord 连接
+    if ds_module.discord_source and ds_module.discord_source.is_connected():
+        await ds_module.discord_source.disconnect()
+        logger.info("Discord 已断开")
+
+    heartbeat_manager.stop()
+
+    # 关闭语音服务 httpx 客户端
+    await voice_service.client.aclose()
+
+    await agent_brain.close()
+    if isinstance(mem_mod.memory_provider, QianxueMemoryProvider):
+        await mem_mod.memory_provider.close()
+    from backend.services.stm_client import stm_client
+    await stm_client.close()
+    await llm_manager.close_all()
+    await napcat_client.close()
+    await database.close()
+
+    # 移除 SSE 日志 handler
+    logging.getLogger('').removeHandler(sse_handler)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
@@ -156,6 +212,8 @@ async def lifespan(app: FastAPI):
     tool_registry.register(SendVoiceTool())
     tool_registry.register(ConnectDiscordTool())
     tool_registry.register(DisconnectDiscordTool())
+    tool_registry.register(ReconnectVoiceTool())
+    tool_registry.register(DisconnectVoiceTool())
     logger.info("AgentBrain 已初始化，工具已注册")
 
     # 初始化核心层
@@ -187,9 +245,19 @@ async def lifespan(app: FastAPI):
     # 初始化语音播放器（Phase 18 框架，Phase 20 接入 Discord）
     logger.info(f"语音播放器已初始化: connected={voice_player.is_connected()}")
 
-    # 初始化 Discord 消息源
+    # 初始化 Discord 消息源 — 后台自动连接，不阻塞启动
     import backend.services.agent.sources.discord_source as ds_module
     ds_module.discord_source = ds_module.DiscordSource()
+    if settings.discord.token:
+        async def _connect_discord():
+            try:
+                await ds_module.discord_source.connect()
+                logger.info("Discord Bot 已自动连接（文字消息模式）")
+            except Exception as e:
+                logger.warning(f"Discord 自动连接失败: {e}")
+        asyncio.create_task(_connect_discord())
+    else:
+        logger.info("Discord token 未配置，跳过自动连接")
     logger.info(f"Discord 消息源已初始化: channels={settings.discord.channels}, dm_enabled={settings.discord.dm_enabled}")
 
     # Wire DiscordSource 消息处理器到对话管道
@@ -245,22 +313,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭时执行
-    logger.info("正在关闭应用...")
-
-    # 断开 Discord 连接
-    if ds_module.discord_source and ds_module.discord_source.is_connected():
-        await ds_module.discord_source.disconnect()
-        logger.info("Discord 已断开")
-
-    heartbeat_manager.stop()
-    await agent_brain.close()
-    if isinstance(mem_mod.memory_provider, QianxueMemoryProvider):
-        await mem_mod.memory_provider.close()
-    from backend.services.stm_client import stm_client
-    await stm_client.close()
-    await llm_manager.close_all()
-    await napcat_client.close()
-    await database.close()
+    await _graceful_shutdown()
     logger.info("应用已关闭")
 
 

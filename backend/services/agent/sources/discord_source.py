@@ -128,18 +128,39 @@ class DiscordSource:
         @self._bot.event
         async def on_ready():
             logger.info(f"Discord Bot 已就绪: {self._bot.user}")
-            # 注入 Bot 实例到 VoicePlayer（per 20-02: 语音频道集成）
+            # 注入 Bot 实例到 VoicePlayer（语音工具需要 Bot 实例才能连接频道）
             voice_player.set_bot(self._bot)
-            # 如果配置了语音频道 ID，自动加入
-            if settings.discord.voice_channel_id:
-                try:
-                    success = await voice_player.connect(str(settings.discord.voice_channel_id))
-                    if success:
-                        logger.info(f"已自动加入语音频道: {settings.discord.voice_channel_id}")
-                    else:
-                        logger.warning(f"自动加入语音频道失败: {settings.discord.voice_channel_id}")
-                except Exception as e:
-                    logger.warning(f"自动加入语音频道异常: {e}")
+
+        @self._bot.event
+        async def on_disconnect():
+            logger.warning("Discord Bot WebSocket 断开连接")
+
+        @self._bot.event
+        async def on_voice_state_update(member, before, after):
+            """监听语音状态变化 — 检测 bot 被踢出语音频道后自动重连。"""
+            # 只关心 bot 自身的状态变化
+            if self._bot.user is None or member.id != self._bot.user.id:
+                return
+            # bot 从语音频道断开，且非主动断开
+            if before.channel is not None and after.channel is None and not voice_player._intentional_disconnect:
+                channel_id = before.channel.id
+                logger.warning(f"Bot 被移出语音频道 {channel_id}，3 秒后尝试重连...")
+                voice_player._connected = False
+                voice_player._voice_client = None
+                await asyncio.sleep(3)
+                if not self._bot.is_closed():
+                    try:
+                        success = await voice_player.connect(str(channel_id))
+                        if success:
+                            logger.info(f"语音频道 {channel_id} 重连成功")
+                        else:
+                            logger.warning(f"语音频道 {channel_id} 重连失败")
+                    except Exception as e:
+                        logger.warning(f"语音频道重连异常: {e}")
+
+        @self._bot.event
+        async def on_error(event_name, *args, **kwargs):
+            logger.error(f"Discord Bot 事件错误: {event_name}")
 
     # ------------------------------------------------------------------
     # 消息处理
@@ -179,12 +200,18 @@ class DiscordSource:
         is_dm = message.guild is None
         is_mentioned = (self._bot.user in message.mentions) if self._bot.user else False
 
+        # 将原始 <@user_id> 替换为可读的 @名字
+        content = message.content
+        for mention_user in message.mentions:
+            content = content.replace(f"<@{mention_user.id}>", f"@{mention_user.display_name}")
+            content = content.replace(f"<@!{mention_user.id}>", f"@{mention_user.display_name}")
+
         agent_msg = AgentMessage(
             source="discord",
             group_id=f"dm_{message.author.id}" if is_dm else str(message.channel.id),
             user_id=str(message.author.id),
             sender_nickname=message.author.display_name,
-            content=message.content,
+            content=content,
             raw_message=f"discord:{message.id}",
             is_mentioned=is_mentioned,
             mentions=[{"id": str(m.id), "name": m.display_name} for m in message.mentions],

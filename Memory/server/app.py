@@ -1,5 +1,13 @@
 """Memory HTTP API Server."""
 
+import os
+
+# 清除代理设置，防止 httpx/requests 走系统代理（仅 Discord 需要代理）
+for _v in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+    os.environ.pop(_v, None)
+import urllib.request
+urllib.request.getproxies = lambda: {}
+
 import logging
 import asyncio
 import threading

@@ -460,15 +460,8 @@ class ContextManager:
                 logger.info(f"自动创建群聊记录: group_id={group_id}")
             self._known_groups.add(group_id)
 
-        # 将@信息转换为可读文本并拼接到content前
-        mentions_text = ""
-        if mentions:
-            # 格式：@张三 @李四（如果@了机器人，机器人名字也会显示）
-            mentioned_names = " ".join([f"@{m['name']}" for m in mentions])
-            mentions_text = mentioned_names + " "
-
-        # 组合完整消息（@文本 + 原始content）
-        full_content = mentions_text + content
+        # content 已经包含 @名字（extract_plain_text 已处理），无需重复拼接
+        full_content = content
 
         # 序列化@信息
         mentions_json = json.dumps(mentions) if mentions else None

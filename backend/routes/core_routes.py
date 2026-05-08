@@ -13,6 +13,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/core", tags=["core"])
 
 
+@router.post("/shutdown")
+async def graceful_shutdown():
+    """触发优雅关闭 — 断开 Discord/FunASR 等外部连接，然后退出进程。"""
+    import asyncio
+
+    logger.info("收到关闭请求，开始优雅退出...")
+
+    # 直接执行清理（断开 Discord 等）
+    try:
+        from backend.main import _graceful_shutdown
+        await _graceful_shutdown()
+    except Exception as e:
+        logger.warning(f"清理异常: {e}")
+
+    # 延迟退出，让 HTTP 响应先发出去
+    async def _exit():
+        await asyncio.sleep(0.5)
+        import os
+        os._exit(0)
+
+    asyncio.create_task(_exit())
+    return {"status": "shutting_down"}
+
+
 class MalleableUpdateRequest(BaseModel):
     """可塑层更新请求。"""
     malleable_yaml: str

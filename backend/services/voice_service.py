@@ -217,7 +217,8 @@ class VoiceService:
                 timeout=timeout
             )
             if not result_text:
-                raise VoiceError("ASR返回空结果")
+                logger.info("ASR转写返回空结果（可能是噪音或静音）")
+                return ""
             logger.info(f"ASR转写成功: {result_text[:100]}")
             return result_text
         except VoiceError:
@@ -231,29 +232,57 @@ class VoiceService:
         """通过 FunASR WebSocket 协议发送音频并获取转写结果。"""
         import json
 
+        # 诊断：检查重采样后 PCM 振幅
+        pcm_samples = len(pcm_data) // 2
+        if pcm_samples > 0:
+            import struct as _struct
+            raw = _struct.unpack_from(f'<{pcm_samples}h', pcm_data)
+            max_amp = max(abs(s) for s in raw)
+            mean_amp = sum(abs(s) for s in raw) / len(raw)
+            logger.info(f"FunASR: PCM诊断 size={len(pcm_data)} samples={pcm_samples} max_amp={max_amp} mean_amp={mean_amp:.1f}")
+
         async with websockets.connect(ws_url) as ws:
+            # FunASR C++ server 要求第一条消息为 JSON 配置
+            # 2pass 模式：先返回在线（快速）结果，再返回离线（准确）结果
+            await ws.send(json.dumps({
+                "mode": "2pass",
+                "chunk_size": [5, 10, 5],
+                "chunk_interval": 10,
+                "wav_name": "audio",
+                "is_speaking": True,
+            }))
+
             # 分块发送音频数据
             chunk_size = 4096
             for i in range(0, len(pcm_data), chunk_size):
                 chunk = pcm_data[i:i + chunk_size]
                 await ws.send(chunk)
 
-            # 发送结束标记
-            await ws.send(json.dumps({"is_end": True}))
+            # 发送结束标记 — FunASR 用 is_speaking: false 通知音频结束
+            await ws.send(json.dumps({"is_speaking": False}))
 
-            # 接收结果
+            # 接收结果 — 2pass 模式返回多次，取最终离线结果
             result_text = ""
+            msg_count = 0
             async for message in ws:
                 try:
                     data = json.loads(message)
+                    msg_count += 1
                     text = data.get("text", "")
+                    mode = data.get("mode", "")
+                    is_final = data.get("is_final", False)
+                    logger.info(f"FunASR: 收到消息#{msg_count} mode={mode} is_final={is_final} text='{text[:100]}'")
                     if text:
                         result_text = text
-                    if data.get("is_final", False) or data.get("mode", "") == "offline":
+                    # 离线模式返回的是最终结果
+                    if mode == "offline":
+                        break
+                    if is_final:
                         break
                 except json.JSONDecodeError:
                     continue
 
+            logger.info(f"FunASR: 共收到{msg_count}条消息，最终结果='{result_text[:100]}'")
             return result_text
 
     # ------------------------------------------------------------------

@@ -10,6 +10,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import os
+for _v in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+    os.environ.pop(_v, None)
+import urllib.request
+urllib.request.getproxies = lambda: {}
+
 import json
 import requests as http_requests
 from flask import Flask, jsonify, render_template_string, request, Response, stream_with_context

@@ -230,6 +230,7 @@ class DeepSeekProvider(LLMProvider):
             data["tools"] = tools
 
         tool_calls_accum: Dict[int, Dict] = {}
+        logger.info(f"DeepSeek stream_chat: model={self.model}, tools={len(tools) if tools else 0}个, stream=True")
 
         try:
             async with self.client.stream(

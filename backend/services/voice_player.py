@@ -13,6 +13,7 @@ import asyncio
 import io
 import logging
 import struct
+import threading
 import time
 import wave
 from typing import Awaitable, Callable, List, Optional
@@ -37,6 +38,14 @@ logger = logging.getLogger(__name__)
 try:
     from discord.ext import voice_recv as _voice_recv_module
     _AudioSinkBase = _voice_recv_module.AudioSink
+    # Patch: 防止 OpusError 腐败包崩溃 PacketRouter 线程
+    _orig_decode_packet = _voice_recv_module.opus.PacketDecoder._decode_packet
+    def _safe_decode_packet(self, packet):
+        try:
+            return _orig_decode_packet(self, packet)
+        except Exception:
+            return packet, b''
+    _voice_recv_module.opus.PacketDecoder._decode_packet = _safe_decode_packet
 except ImportError:
     _voice_recv_module = None
     # 降级基类：允许模块导入，但 connect() 时会拒绝
@@ -61,8 +70,9 @@ class SilenceSegmentingSink(_AudioSinkBase):
     """
 
     SILENCE_THRESHOLD = 500        # 振幅阈值 (0-32767)
-    SILENCE_DURATION = 1.0         # 静音持续时间（秒）触发语音段结束
+    SILENCE_DURATION = 0.12        # 静音持续时间（秒），需短于 Discord VAD 断流（~200ms）
     MIN_SPEECH_DURATION = 0.3      # 最短有效语音时长（秒）
+    MAX_SPEECH_DURATION = 8.0      # 最长语音段（秒），超时自动提交
     INTERRUPTION_DELAY = 0.3       # 持续语音确认打断延迟（秒），per D-09
 
     def __init__(self, voice_player: "VoicePlayer"):
@@ -104,8 +114,12 @@ class SilenceSegmentingSink(_AudioSinkBase):
         has_energy = self._has_speech_energy(pcm)
         now = time.monotonic()
 
+        if self._is_speaking:
+            logger.debug(f"Sink: write energy={has_energy} buf={len(self._buffer)} dur={now - self._speech_start_time:.2f}s")
+
         if has_energy:
             if not self._is_speaking:
+                logger.info(f"Sink: 语音开始 user={getattr(user, 'name', '?')} buffer={len(self._buffer)}")
                 # 语音开始
                 self._is_speaking = True
                 self._speech_start_time = now
@@ -117,6 +131,12 @@ class SilenceSegmentingSink(_AudioSinkBase):
                         and (now - self._sustained_speech_start) >= self.INTERRUPTION_DELAY):
                     self._voice_player.trigger_interruption()
 
+                # 超时自动提交（防止静音检测永远不触发）
+                if (now - self._speech_start_time) >= self.MAX_SPEECH_DURATION:
+                    logger.info(f"Sink: 语音段超时 {self.MAX_SPEECH_DURATION}s，强制提交")
+                    self._flush_segment()
+                    return
+
             self._last_speech_time = now
             self._buffer.extend(pcm)
 
@@ -124,6 +144,7 @@ class SilenceSegmentingSink(_AudioSinkBase):
             # 语音后静音 -- 继续收集（包含尾部静音）
             self._buffer.extend(pcm)
             silence_duration = now - self._last_speech_time
+            logger.debug(f"Sink: 静音中 silence={silence_duration:.2f}s")
             if silence_duration >= self.SILENCE_DURATION:
                 self._flush_segment()
                 # 重置打断追踪
@@ -153,11 +174,13 @@ class SilenceSegmentingSink(_AudioSinkBase):
         duration = time.monotonic() - self._speech_start_time
 
         if duration < self.MIN_SPEECH_DURATION or len(self._buffer) < 1:
+            logger.info(f"Sink: 语音段太短丢弃 dur={duration:.2f}s len={len(self._buffer)}")
             self._buffer.clear()
             return
 
         audio_data = bytes(self._buffer)
         self._buffer.clear()
+        logger.info(f"Sink: 提交语音段 dur={duration:.2f}s size={len(audio_data)}")
 
         # 获取 Bot 的事件循环，线程安全调度异步处理
         try:
@@ -197,6 +220,7 @@ class VoicePlayer:
         self._voice_client = None       # VoiceRecvClient 实例
         self._bot = None                # DiscordSource 的 Bot 实例
         self._bot_user_id: Optional[int] = None
+        self._intentional_disconnect: bool = False  # 区分主动断开和被动踢出
 
         # 消息处理回调（与 DiscordSource 共享同一个 handler）
         self._message_handler: Optional[Callable[[AgentMessage], Awaitable[None]]] = None
@@ -296,9 +320,11 @@ class VoicePlayer:
         if self._connected and self._voice_client:
             await self.disconnect()
 
-        # 6. 连接语音频道
+        self._intentional_disconnect = False
+
+        # 6. 连接语音频道（加大超时，代理环境下 UDP 握手较慢）
         try:
-            self._voice_client = await channel.connect(cls=voice_recv.VoiceRecvClient)
+            self._voice_client = await channel.connect(cls=voice_recv.VoiceRecvClient, timeout=60)
         except Exception as e:
             logger.error(f"VoicePlayer.connect: 连接语音频道失败: {e}")
             self._voice_client = None
@@ -321,6 +347,7 @@ class VoicePlayer:
 
     async def disconnect(self) -> None:
         """断开语音频道连接，清理所有资源。"""
+        self._intentional_disconnect = True
         if self._voice_client:
             try:
                 if hasattr(self._voice_client, 'is_listening') and self._voice_client.is_listening():
@@ -515,6 +542,14 @@ class VoicePlayer:
             return
 
         try:
+            # 诊断：检查原始音频振幅
+            sample_count = len(audio_data) // 2
+            if sample_count > 0:
+                raw_samples = struct.unpack_from(f'<{sample_count}h', audio_data)
+                max_amp = max(abs(s) for s in raw_samples)
+                mean_amp = sum(abs(s) for s in raw_samples) / len(raw_samples)
+                logger.info(f"VoicePlayer: 原始音频诊断 size={len(audio_data)} max_amp={max_amp} mean_amp={mean_amp:.1f}")
+
             # 将 48kHz 立体声 PCM 包装为 WAV bytes
             # VoiceService._convert_to_pcm() 会自动重采样为 16kHz mono
             with io.BytesIO() as wav_buffer:
@@ -525,9 +560,19 @@ class VoicePlayer:
                     wf.writeframes(audio_data)
                 wav_bytes = wav_buffer.getvalue()
 
+            # DEBUG: 保存 WAV 文件用于人工验证
+            try:
+                debug_path = "debug_voice_input.wav"
+                with open(debug_path, 'wb') as f:
+                    f.write(wav_bytes)
+                logger.info(f"VoicePlayer: DEBUG 已保存音频到 {debug_path}")
+            except Exception:
+                pass
+
             # 转写
             text = await voice_service.transcribe(wav_bytes)
             if not text or not text.strip():
+                logger.info("VoicePlayer: 语音段转写为空，丢弃")
                 return
 
             # 创建 AgentMessage
