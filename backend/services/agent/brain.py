@@ -144,16 +144,17 @@ class AgentBrain:
             called_tool_names = {tc.get("tool_name") for tc in tool_calls}
             has_slow_tool = bool(called_tool_names - FAST_TOOLS - {"send_message"})
             has_send = any(tc.get("tool_name") == "send_message" for tc in tool_calls)
+            has_voice = any(tc.get("tool_name") == "send_voice" for tc in tool_calls)
 
             interim_msg = llm_response.get("interim_message", "")
 
             # 模型显式提供了 interim_message
-            if interim_msg and tool_calls and not llm_response.get("done") and not interim_sent:
+            if interim_msg and tool_calls and not llm_response.get("done") and not interim_sent and not has_voice:
                 interim_sent = True
                 logger.info(f"发送中间消息: {interim_msg[:50]}")
                 asyncio.create_task(self._send_interim_message(message, interim_msg))
-            # 仅当调了耗时工具且没有 send_message 时，自动发一条
-            elif has_slow_tool and not has_send and not interim_sent:
+            # 仅当调了耗时工具且没有 send_message 且没有 send_voice 时，自动发一条
+            elif has_slow_tool and not has_send and not interim_sent and not has_voice:
                 interim_sent = True
                 import random
                 auto_msgs = settings.brain.interim_messages
@@ -769,6 +770,20 @@ class AgentBrain:
         try:
             text = text[:settings.brain.interim_max_length] if len(text) > settings.brain.interim_max_length else text
 
+            # Discord 路由
+            if message.source == "discord":
+                from backend.services.agent.sources.discord_source import discord_source
+                if discord_source and discord_source.is_connected():
+                    is_private = message.group_id.startswith("dm_")
+                    await discord_source.send_message(
+                        channel_id=message.group_id,
+                        text=text,
+                        is_private=is_private,
+                    )
+                    logger.info("中间消息已发送(Discord): " + text)
+                    return
+
+            # QQ 路由
             if message.is_private:
                 await napcat_client.send_private_message(int(message.user_id), text)
             else:

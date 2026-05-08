@@ -150,13 +150,24 @@ def _build_tools_section(tools_description: str) -> str:
 
 # 工具使用原则
 
-## search_memory — 必须使用的场景
+## 核心规则
 
-以下情况必须调用 search_memory，不要自己编造回忆：
-- 对方让你"想想"、"回忆"、"还记得吗"等涉及过去的事
+- 你必须通过 tool_calls 调用工具来执行操作，绝对不能用文字替代工具调用
+- 每一轮只调用必要的工具，不要无意义地调用 search_memory
+- 不要在同一轮同时调用 search_memory 和其他行动工具，先搜索，下一轮再行动
+
+## connect_discord
+
+- 当你决定要连接 Discord 时，必须调用 connect_discord 工具
+- 绝对不能只用文字说"我连上了"——必须实际调用工具
+- 调用 connect_discord 后，根据返回结果告知用户连接状态
+
+## search_memory — 适用场景
+
+只有以下情况才调用 search_memory，不要滥用：
+- 对方让你"想想"、"回忆"、"还记得吗"等明确涉及过去的事
 - 对方提到"关于我的事"、"我们之前"、"上次"等过去经历
 - 对方问你知道什么关于某人/某事
-- 你对对话中提到的人和事不确定
 
 ## search_memory 使用规则
 
@@ -169,6 +180,7 @@ def _build_tools_section(tools_description: str) -> str:
 ## 其他工具
 
 - get_current_time：时间对回复有意义时
+- send_voice：用语音回复时（需要先 connect_discord）
 - 不需要每次都用 get_current_time
 
 ## 对话注意事项

@@ -60,12 +60,16 @@ async def check_opus() -> Tuple[bool, str]:
         import discord
         if discord.opus.is_loaded():
             return (True, "OK")
-        try:
-            discord.opus.load_opus("opus")
-        except Exception:
-            pass
-        if discord.opus.is_loaded():
-            return (True, "OK")
+        import os as _os
+        for _path in ['opus', 'libopus',
+                       _os.path.join(_os.getcwd(), 'opus.dll'),
+                       _os.path.join(_os.getcwd(), 'libopus.dll')]:
+            try:
+                discord.opus.load_opus(_path)
+                if discord.opus.is_loaded():
+                    return (True, "OK")
+            except Exception:
+                pass
         return (False, "libopus 未加载。请下载 opus.dll 放到工作目录或系统 PATH")
     except Exception as e:
         return (False, str(e))

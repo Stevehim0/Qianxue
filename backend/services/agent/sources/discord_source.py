@@ -46,6 +46,7 @@ class DiscordSource:
     def __init__(self):
         cfg = settings.discord
         self._token = cfg.token
+        self._proxy = cfg.proxy or None
         self._channel_ids = set(cfg.channels)
         self._dm_enabled = cfg.dm_enabled
 
@@ -87,7 +88,7 @@ class DiscordSource:
         self._intents.message_content = True
         self._intents.dm_messages = True
 
-        self._bot = commands.Bot(intents=self._intents, command_prefix="!")
+        self._bot = commands.Bot(intents=self._intents, command_prefix="!", proxy=self._proxy)
         self._register_handlers()
         self._task = asyncio.create_task(self._bot.start(self._token))
         logger.info("Discord Bot 正在连接...")

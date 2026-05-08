@@ -26,6 +26,8 @@ class ConnectDiscordTool(Tool):
         return (
             "连接到 Discord。连接后可以接收和发送文字消息，以及监听语音频道。"
             "类似于人类'打开 Discord App'。无需任何参数。"
+            "重要：要连接 Discord 必须调用此工具！不能只回复文字说'我连上了'，"
+            "必须通过 tool_calls 实际调用 connect_discord 工具。"
         )
 
     @property
@@ -46,10 +48,16 @@ class ConnectDiscordTool(Tool):
         try:
             await discord_source.connect()
             # 等待 Bot 就绪（on_ready 回调会处理 voice_player.set_bot 和自动连语音频道）
-            for _ in range(10):
+            for _ in range(15):
                 if discord_source.is_connected():
                     break
                 await asyncio.sleep(1)
+
+            if not discord_source.is_connected():
+                return {
+                    "success": False,
+                    "message": "连接 Discord 超时：Bot 未能就绪，可能是网络问题（Discord Gateway 不可达）。"
+                }
 
             voice_status = "语音频道已连接" if voice_player.is_connected() else "未连接语音频道"
             return {

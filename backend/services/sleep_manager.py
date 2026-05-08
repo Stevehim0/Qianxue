@@ -68,6 +68,11 @@ class SleepManager:
     def check_and_transition(self) -> bool:
         """检查当前时间，执行状态转换。返回是否刚发生唤醒。"""
         if not self.enabled:
+            if self._state != "AWAKE":
+                logger.info(f"睡眠已禁用，状态重置: {self._state} → AWAKE")
+                self._state = "AWAKE"
+                self._energy_label = "充沛"
+                return True
             return False
 
         hour = datetime.now().hour

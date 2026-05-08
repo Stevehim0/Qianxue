@@ -162,6 +162,7 @@ class DiscordVoiceConfig:
 @dataclass
 class DiscordConfig:
     token: str = ""
+    proxy: str = ""
     channels: List[int] = field(default_factory=list)
     dm_enabled: bool = True
     connect_timeout: int = 30
@@ -461,6 +462,7 @@ class ConfigLoader:
         v = r.get("voice", {})
         return DiscordConfig(
             token=r.get("token", ""),
+            proxy=r.get("proxy", ""),
             channels=r.get("channels", []),
             dm_enabled=r.get("dm_enabled", True),
             connect_timeout=r.get("connect_timeout", 30),

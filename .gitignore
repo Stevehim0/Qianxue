@@ -25,8 +25,14 @@ venv/
 env/
 ENV/
 
-# Environment variables (only needed if user overrides)
+# Environment variables
+.env
 .env.local
+
+# Config files with secrets (use .example versions as templates)
+backend/config/discord.yaml
+backend/config/llm.yaml
+backend/config/vision.yaml
 
 # Testing
 .pytest_cache/
