@@ -849,6 +849,8 @@ class AgentBrain:
                         collected_text += token
                         sentences = detector.feed(token)
                         for sentence in sentences:
+                            if sentence.strip() == "（沉默）":
+                                continue
                             await message_manager.send_sentence(message, sentence)
                             full_reply_parts.append(sentence)
 
@@ -859,6 +861,8 @@ class AgentBrain:
                     elif event_type == "done":
                         # flush 剩余文字
                         for sentence in detector.flush():
+                            if sentence.strip() == "（沉默）":
+                                continue
                             await message_manager.send_sentence(message, sentence)
                             full_reply_parts.append(sentence)
 

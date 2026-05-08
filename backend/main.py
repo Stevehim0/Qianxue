@@ -435,8 +435,9 @@ def _get_debounce(key: str) -> dict:
 async def _enqueue_message(key: str, message):
     """消息入队，启动/重置 debounce 计时器。
 
-    - AI 空闲：等待后处理（等对方说完）
-    - AI 忙：排队等 AI 回完，等待时间内没新消息再处理
+    - @消息：跳过等待立即处理（合并队列中已有消息）
+    - 普通消息：走 debounce 聚合，等对方说完再处理
+    - AI 忙时排队等 AI 回完
     """
     state = _get_debounce(key)
     state["queue"].append(message)
@@ -444,15 +445,25 @@ async def _enqueue_message(key: str, message):
     # 标记对话活跃，阻止心跳对该群/私聊插嘴
     agent_brain.mark_conversation_active(key)
 
-    # 取消旧计时器，启动新的
-    if state["timer"] is not None:
-        state["timer"].cancel()
+    is_mention = message.priority >= settings.brain.mention_priority and not message.is_private
 
-    async def _fire():
-        await asyncio.sleep(config_manager.debounce_seconds)
+    if is_mention:
+        # @消息：取消 debounce 计时器，立即处理队列中所有消息
+        if state["timer"] is not None:
+            state["timer"].cancel()
+            state["timer"] = None
+        logger.info(f"[{key}] @消息，跳过等待立即处理")
         await _drain_queue(key)
+    else:
+        # 普通消息：启动/重置 debounce 计时器
+        if state["timer"] is not None:
+            state["timer"].cancel()
 
-    state["timer"] = asyncio.create_task(_fire())
+        async def _fire():
+            await asyncio.sleep(config_manager.debounce_seconds)
+            await _drain_queue(key)
+
+        state["timer"] = asyncio.create_task(_fire())
 
     if state["lock"].locked():
         logger.info(f"[{key}] AI忙，消息排队 (队列: {len(state['queue'])}条)")
