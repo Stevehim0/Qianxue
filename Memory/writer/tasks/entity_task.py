@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 from Memory.llm.base import BaseLLMClient
+from Memory.config.settings import settings
 from Memory.embedding.model import EmbeddingService
 from Memory.storage.entity_store import EntityStore, Entity
 from Memory.storage.cross_edge_store import CrossEdgeStore, CrossEdge
@@ -129,6 +130,13 @@ def recognize_entities_and_create_edges(
         entity_confidence = entity_data.get("confidence", 1.0)
 
         if not entity_name or not entity_type:
+            logger.warning(f"Invalid entity data: {entity_data}")
+            continue
+
+        # 跳过 AI 自身的实体
+        if entity_name == settings.writer.bot_name:
+            logger.debug(f"Skipping bot self-entity: {entity_name}")
+            continue
             logger.warning(f"Invalid entity data: {entity_data}")
             continue
 

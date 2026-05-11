@@ -11,6 +11,7 @@ from typing import Optional
 import numpy as np
 
 from Memory.llm.base import BaseLLMClient
+from Memory.config.settings import settings
 from Memory.embedding.model import EmbeddingService
 from Memory.embedding.vector_store import VectorStore
 from Memory.storage.experience_store import ExperienceStore, Experience
@@ -68,7 +69,7 @@ def generate_l0_summary(
     """
     # ========== Step 1: 加载Prompt模板 ==========
     prompt_template = _load_prompt_template()
-    prompt = prompt_template.format(dialogue=dialogue, ai_personality=stable_text or "无")
+    prompt = prompt_template.format(dialogue=dialogue, ai_personality=stable_text or "无", bot_name=settings.writer.bot_name)
 
     logger.debug(f"Generating L0 summary for {experience_id} from dialogue")
 

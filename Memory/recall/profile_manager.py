@@ -457,16 +457,32 @@ class ProfileManager:
 
                     # 更新档案
                     profile = self.profile_store.get_by_name(entity_name)
-                    if profile:
-                        basic = profile.basic or {}
-                        existing_notes = basic.get("notes", "")
-                        new_notes = f"{existing_notes}\n[{now}] {combined}" if existing_notes else f"[{now}] {combined}"
-                        basic["notes"] = new_notes
-                        profile.basic = basic
-                        self.profile_store.update(profile)
-                        logger.info(f"档案更新: {entity_name} 合并了 {len(facts)} 条事实")
-                    else:
-                        logger.debug(f"档案不存在: {entity_name}, 跳过更新")
+                    if not profile:
+                        # 档案不存在，自动创建一个基础档案
+                        from Memory.storage.profile_store import PersonProfile as StoreProfile
+                        now_iso = datetime.now().isoformat()
+                        profile = StoreProfile(
+                            id=f"profile_{entity_name}",
+                            basic={
+                                "name": entity_name,
+                                "type": "person",
+                                "first_met": now_iso,
+                                "relation_to_self": "unknown",
+                                "notes": f"自动创建于{now_iso}",
+                            },
+                            interaction_style={},
+                            preferences={},
+                        )
+                        self.profile_store.create(profile)
+                        logger.info(f"自动创建档案: {entity_name}")
+
+                    basic = profile.basic or {}
+                    existing_notes = basic.get("notes", "")
+                    new_notes = f"{existing_notes}\n[{now}] {combined}" if existing_notes else f"[{now}] {combined}"
+                    basic["notes"] = new_notes
+                    profile.basic = basic
+                    self.profile_store.update(profile)
+                    logger.info(f"档案更新: {entity_name} 合并了 {len(facts)} 条事实")
 
                     # 删除已处理的 facts
                     with db_manager.transaction() as cursor:

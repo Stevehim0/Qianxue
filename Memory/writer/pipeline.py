@@ -207,6 +207,10 @@ class WriterPipeline:
             if not entity_name:
                 continue
 
+            # 跳过 AI 自身（不为被服务的主体建档案）
+            if entity_name == settings.writer.bot_name:
+                continue
+
             try:
                 # 构建 Experience 对象（check_and_create_profile 需要用于推导初始相处方式）
                 experience = Experience(
@@ -441,7 +445,11 @@ class WriterPipeline:
 
         # 加载prompt模板（使用原有逻辑）
         prompt_template = _load_prompt_template()
-        prompt = prompt_template.format(dialogue=dialogue, ai_personality=self.stable_text or "无")
+        prompt = prompt_template.format(
+            dialogue=dialogue,
+            ai_personality=self.stable_text or "无",
+            bot_name=settings.writer.bot_name,
+        )
 
         # 调用LLM（使用原有逻辑）
         l0_text = self.llm_client.call_with_retry(
@@ -500,11 +508,17 @@ class WriterPipeline:
 
         # 为每个实体生成embedding（Phase 15格式）
         entity_data_list = []
+        bot_name = settings.writer.bot_name
         for entity_item in entity_list:
             entity_id = str(uuid.uuid4())
             # Phase 15实体格式
             entity_name = entity_item.get("name", "")
             entity_type = entity_item.get("type", "other")
+
+            # 跳过 AI 自身的实体（不应为被服务的主体建实体）
+            if entity_name == bot_name:
+                self.logger.debug(f"Skipping bot self-entity: {entity_name}")
+                continue
             entity_attributes = entity_item.get("attributes", {})
             entity_confidence = entity_item.get("confidence", 1.0)
 
@@ -560,6 +574,7 @@ class WriterPipeline:
             ai_personality=self.stable_text or "无",
             state_focus=state_focus if state_focus else "无",
             state_mood_label=mood_label,
+            bot_name=settings.writer.bot_name,
         )
 
         try:

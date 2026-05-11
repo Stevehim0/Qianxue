@@ -361,7 +361,7 @@ class BufferManager:
         try:
             logger.info("质量检查: 开始判断对话是否值得记住...")
             template = self._load_quality_prompt()
-            prompt = template.format(dialogue=dialogue)
+            prompt = template.format(dialogue=dialogue, bot_name=settings.writer.bot_name)
 
             response = self._llm_client.call_with_retry(
                 prompt=prompt,
@@ -410,9 +410,12 @@ class BufferManager:
             from datetime import datetime
 
             now = datetime.now().isoformat()
+            bot_name = settings.writer.bot_name
             with db_manager.transaction() as cursor:
                 for name, fact in people.items():
                     if not name or not fact or not isinstance(fact, str):
+                        continue
+                    if name == bot_name:
                         continue
                     cursor.execute(
                         "INSERT INTO profile_pending_facts (entity_name, fact_text, source_type, created_at) VALUES (?, ?, ?, ?)",
@@ -467,7 +470,7 @@ class BufferManager:
         """定时处理积累的 pending facts，更新个人档案。"""
         try:
             if hasattr(self, '_writer_pipeline') and self._writer_pipeline.profile_manager:
-                self._writer_pipeline.profile_manager.process_pending_facts(threshold=20)
+                self._writer_pipeline.profile_manager.process_pending_facts(threshold=5)
         except Exception as e:
             logger.warning(f"处理 pending facts 失败: {e}")
 

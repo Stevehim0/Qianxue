@@ -32,6 +32,7 @@ from backend.services.context_manager import context_manager
 from backend.routes.config_routes import router as config_router
 from backend.routes.chat_routes import router as chat_router
 from backend.routes.core_routes import router as core_router
+from backend.routes.screen_routes import router as screen_router
 
 from backend.services.agent.sources.qq_source import QQSource
 from backend.services.agent.tools.registry import ToolRegistry
@@ -329,6 +330,7 @@ app = FastAPI(
 app.include_router(config_router)
 app.include_router(chat_router)
 app.include_router(core_router)
+app.include_router(screen_router)
 
 
 @app.websocket("/ws/onebot")

@@ -61,8 +61,8 @@ class LLMFactory:
         """
         # 自动选择逻辑
         if provider == "auto":
-            # 默认使用千问
-            provider = "qianwen"
+            from Memory.config.settings import settings
+            provider = settings.models.llm_provider
 
         # 获取客户端类
         client_class = cls._clients.get(provider)

@@ -62,9 +62,9 @@ class DecayConfig:
 class ScheduleConfig:
     """作息时间配置。"""
 
-    enabled: bool = False  # 是否启用巩固和休眠调度
-    sleep_time: str = "02:00"  # 入睡时间
-    wake_time: str = "08:00"  # 起床时间
+    enabled: bool = True  # 是否启用巩固和休眠调度
+    sleep_time: str = "03:00"  # 入睡时间
+    wake_time: str = "09:00"  # 起床时间
     timezone: str = "Asia/Shanghai"  # 时区
 
 
@@ -82,12 +82,11 @@ class WriterConfig:
     """写入层配置。
 
     Attributes:
+        bot_name: 所服务的 AI 名称，用于 prompt 中标识"对话中哪个说话人是 AI 自己"
         entity_similarity_threshold: 实体识别预筛相似度阈值（0-1）
-        - 阈值越高，预筛越严格，进入prompt的实体越少
-        - 阈值越低，预筛越宽松，进入prompt的实体越多
-        - 第一版默认值0.5，后续可根据实际数据调整
     """
 
+    bot_name: str = "千雪"
     entity_similarity_threshold: float = 0.5
 
     def __post_init__(self):

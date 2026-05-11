@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from Memory.llm.base import BaseLLMClient
+from Memory.config.settings import settings
 from Memory.storage.experience_store import ExperienceStore, Experience
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,7 @@ def analyze_emotion_and_check_state(
         state_focus=state_focus if state_focus else "无",
         state_mood_label=state_mood_label,
         ai_personality=stable_text or "无",
+        bot_name=settings.writer.bot_name,
     )
 
     logger.debug(f"Analyzing emotion for {experience_id}")
