@@ -32,6 +32,8 @@ class MessageManager:
         - voice_ 前缀 → TTS → voice_player streaming queue
         - dm_ 前缀 → Discord 文字发送
         - private_ 前缀 → QQ 私聊发送
+        - computer → 本地前端 WebSocket
+        - discord source → Discord 文字发送
         - 其他 → QQ 群聊发送
 
         Returns:
@@ -42,7 +44,13 @@ class MessageManager:
 
         # 语音频道 → TTS 管道
         if group_id.startswith("voice_"):
+            if source == "computer":
+                return await self._send_computer_voice(sentence)
             return await self._send_voice(sentence)
+
+        # 本地电脑聊天
+        if source == "computer":
+            return await self._send_computer_text(sentence)
 
         # Discord 文字
         if group_id.startswith("dm_"):
@@ -66,7 +74,12 @@ class MessageManager:
         自动路由到正确平台。
         """
         if group_id.startswith("voice_"):
+            if source == "computer":
+                return await self._send_computer_voice(text)
             return await self._send_voice(text)
+
+        if source == "computer":
+            return await self._send_computer_text(text)
 
         if group_id.startswith("dm_"):
             return await self._send_discord(group_id, text)
@@ -135,6 +148,26 @@ class MessageManager:
             return await napcat_client.send_group_message(int(group_id), text)
         except Exception as e:
             logger.error(f"MessageManager QQ 群聊发送失败: {e}")
+            return False
+
+    async def _send_computer_text(self, text: str) -> bool:
+        """发送文本到本地电脑前端。"""
+        try:
+            from backend.routes.computer_routes import send_to_computer
+            return await send_to_computer(text)
+        except Exception as e:
+            logger.error(f"MessageManager 电脑前端发送失败: {e}")
+            return False
+
+    async def _send_computer_voice(self, text: str) -> bool:
+        """合成 TTS 音频并发送到本地电脑前端。"""
+        try:
+            from backend.services.voice_service import voice_service
+            from backend.routes.computer_routes import send_audio_to_computer
+            mp3 = await voice_service.synthesize(text)
+            return await send_audio_to_computer(mp3)
+        except Exception as e:
+            logger.error(f"MessageManager 电脑 TTS 失败: {e}")
             return False
 
 

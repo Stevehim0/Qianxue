@@ -130,6 +130,62 @@ class SendMessageTool(Tool):
         chunks = _split_message(content)
         sent_chunks: list[str] = []
 
+        # 本地电脑路由
+        is_computer = group_id == "computer_home"
+        if is_computer:
+            try:
+                from backend.routes.computer_routes import send_to_computer
+                for chunk in chunks:
+                    await send_to_computer(chunk)
+                    sent_chunks.append(chunk)
+                full_reply = "".join(sent_chunks)
+
+                # 上下文存储
+                await context_manager.add_group_message(
+                    group_id=group_id,
+                    user_id="robot",
+                    role="assistant",
+                    content=full_reply,
+                    sender_nickname="机器人",
+                    mentions=[],
+                    is_directed_at_bot=False
+                )
+
+                # 记忆系统
+                try:
+                    asyncio.create_task(
+                        mem_mod.memory_provider.extract_and_store(
+                            group_id=group_id,
+                            user_id="robot",
+                            content=full_reply,
+                            role="assistant",
+                            speaker="千雪",
+                            source_type="computer_chat",
+                        )
+                    )
+                except Exception:
+                    pass
+
+                # STM
+                try:
+                    from backend.services.stm_client import stm_client
+                    asyncio.create_task(stm_client.record_event(
+                        event_type="ai_reply",
+                        source_type="computer_chat",
+                        group_id=group_id,
+                        summary=f"你回复了: {full_reply[:60]}",
+                        importance=0.6,
+                    ))
+                except Exception:
+                    pass
+
+                logger.info(f"电脑聊天回复发送成功: {full_reply[:50]}...")
+                return {"success": True, "message": full_reply, "group_id": group_id}
+
+            except Exception as e:
+                logger.error(f"电脑聊天回复发送失败: {e}", exc_info=True)
+                return {"success": False, "error": str(e)}
+
         # Discord 路由判断
         is_discord = False
         if group_id.startswith("dm_"):

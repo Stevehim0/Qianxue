@@ -172,6 +172,31 @@ class Database:
                 ON conversations(group_id, timestamp DESC)
             """)
 
+            # 统一身份表
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS unified_identities (
+                    id TEXT PRIMARY KEY,
+                    canonical_name TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS identity_aliases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    identity_id TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    platform_id TEXT NOT NULL,
+                    platform_nickname TEXT DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (identity_id) REFERENCES unified_identities(id),
+                    UNIQUE(platform, platform_id)
+                )
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_aliases_platform
+                ON identity_aliases(platform, platform_id)
+            """)
+
             await conn.commit()
         except Exception as e:
             print(f"数据库迁移警告: {e}")

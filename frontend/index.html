@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>千雪</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <span class="status-dot" id="status-dot"></span>
+        <h1>千雪</h1>
+        <span class="status-text" id="status-text">连接中...</span>
+        <label class="voice-toggle" title="语音播放">
+            <input type="checkbox" id="voice-toggle">
+            <span class="voice-icon" id="voice-icon">🔇</span>
+        </label>
+    </header>
+
+    <div id="chat-container"></div>
+
+    <div id="input-area">
+        <textarea id="msg-input" rows="1" placeholder="跟千雪说点什么..."></textarea>
+        <button id="send-btn">发送</button>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

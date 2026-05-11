@@ -181,6 +181,7 @@ def _build_tools_section(tools_description: str) -> str:
 
 - get_current_time：时间对回复有意义时
 - send_voice：用语音回复时（需要先 connect_discord）
+- link_identity：当你发现不同平台上的人其实是同一个人时使用。比如有人说"我的QQ号是xxx"，或者你发现某个人的说话风格和你在别处认识的人很像。你可以主动问"你是不是xxx？"确认后记录关联
 - 不需要每次都用 get_current_time
 
 ## 对话注意事项

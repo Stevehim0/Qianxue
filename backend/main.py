@@ -33,6 +33,7 @@ from backend.routes.config_routes import router as config_router
 from backend.routes.chat_routes import router as chat_router
 from backend.routes.core_routes import router as core_router
 from backend.routes.screen_routes import router as screen_router
+from backend.routes.computer_routes import router as computer_router
 
 from backend.services.agent.sources.qq_source import QQSource
 from backend.services.agent.tools.registry import ToolRegistry
@@ -46,6 +47,7 @@ from backend.services.agent.tools.connect_discord import ConnectDiscordTool
 from backend.services.agent.tools.disconnect_discord import DisconnectDiscordTool
 from backend.services.agent.tools.reconnect_voice import ReconnectVoiceTool
 from backend.services.agent.tools.disconnect_voice import DisconnectVoiceTool
+from backend.services.agent.tools.link_identity import LinkIdentityTool
 from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
 from backend.services.heartbeat_manager import heartbeat_manager
 from backend.services.voice_service import voice_service
@@ -180,6 +182,11 @@ async def lifespan(app: FastAPI):
     await _ensure_robot_user()
     logger.info("机器人用户初始化完成")
 
+    # 加载身份映射缓存
+    from backend.services.identity_service import identity_service
+    await identity_service.load_cache()
+    logger.info(f"身份映射缓存已加载")
+
     # 初始化 LLM providers（使用统一配置）
     from backend.routes.config_routes import create_provider
 
@@ -215,6 +222,7 @@ async def lifespan(app: FastAPI):
     tool_registry.register(DisconnectDiscordTool())
     tool_registry.register(ReconnectVoiceTool())
     tool_registry.register(DisconnectVoiceTool())
+    tool_registry.register(LinkIdentityTool())
     logger.info("AgentBrain 已初始化，工具已注册")
 
     # 初始化核心层
@@ -299,6 +307,37 @@ async def lifespan(app: FastAPI):
     voice_player.set_message_handler(_discord_message_handler)
     logger.info("VoicePlayer 消息处理器已接线")
 
+    # 接线 ComputerRoutes 消息处理器
+    async def _computer_message_handler(msg):
+        """本地电脑聊天消息进入对话处理管道."""
+        # 存入上下文
+        await context_manager.add_group_message(
+            group_id=msg.group_id,
+            user_id=msg.user_id,
+            role="user",
+            content=msg.content,
+            sender_nickname=msg.sender_nickname,
+            mentions=[],
+            is_directed_at_bot=True
+        )
+        # 记忆提取
+        asyncio.create_task(_extract_memory(msg.group_id, msg.user_id, msg.content, source_type="computer_chat"))
+        # STM 事件
+        _record_stm_event(
+            event_type="user_mention",
+            source_type="computer_chat",
+            group_id=msg.group_id,
+            user_id=msg.user_id,
+            summary=f"本地聊天: {msg.content[:50]}",
+            importance=settings.brain.stm_importance_user_mention,
+        )
+        # Debounce 队列
+        await _enqueue_message(msg.group_id, msg)
+
+    from backend.routes import computer_routes as cr_module
+    cr_module.set_message_handler(_computer_message_handler)
+    logger.info("电脑聊天消息处理器已接线")
+
     # 初始化睡眠管理器
     sleep_manager.set_brain(agent_brain)
     asyncio.create_task(run_sleep_cycle())
@@ -331,6 +370,14 @@ app.include_router(config_router)
 app.include_router(chat_router)
 app.include_router(core_router)
 app.include_router(screen_router)
+app.include_router(computer_router)
+
+# 静态前端（本地聊天页面）
+import os as _os
+_frontend_dir = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "frontend")
+if _os.path.isdir(_frontend_dir):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/chat", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
 
 
 @app.websocket("/ws/onebot")

@@ -580,19 +580,16 @@ class ContextManager:
         [14:30] 张三: 大家好
         [14:31] 李四(@机器人): 你好，机器人
         [14:32] 机器人: 你好李四！
-
-        时间较旧的消息会显示相对时间标注，如：
-        [14:30 (23分钟前)] 张三: 大家好
-        [昨天 14:30] 张三: 大家好
-
-        Args:
-            messages: 群聊消息列表
-            include_mentions: 是否包含@信息
-
-        Returns:
-            格式化后的文本
         """
         from backend.services.core.time_utils import format_relative_time_for_display
+        from backend.services.identity_service import identity_service
+
+        # 推断平台（从第一条消息的 group_id）
+        platform = "qq"
+        if messages:
+            gid = messages[0].group_id
+            if gid.startswith("dm_") or gid.startswith("voice_") or "discord" in gid:
+                platform = "discord"
 
         formatted_lines = []
 
@@ -617,6 +614,10 @@ class ContextManager:
                 sender = "机器人"
             else:
                 sender = msg.sender_nickname or f"用户{msg.user_id[-4:]}"
+                # 尝试解析统一身份名（缓存查找，同步）
+                resolved = identity_service.resolve_cached(platform, msg.user_id)
+                if resolved and resolved != sender:
+                    sender = f"{resolved}({sender})"
 
             # 标记@机器人的消息（content中已包含@文本，这里只额外标记机器人）
             bot_tag = " @机器人" if msg.is_directed_at_bot else ""

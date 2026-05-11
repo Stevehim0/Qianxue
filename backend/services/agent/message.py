@@ -53,6 +53,11 @@ class AgentMessage(BaseModel):
     # 心跳附加上下文（仅心跳消息使用）
     heartbeat_group_summaries: Optional[Dict] = Field(default=None, description="各群消息摘要")
 
+    @property
+    def is_computer(self) -> bool:
+        """是否来自本地电脑聊天."""
+        return self.source == "computer"
+
     @classmethod
     def create_heartbeat(cls, group_summaries: Optional[Dict] = None) -> "AgentMessage":
         """创建心跳消息（虚拟消息，不来自真实用户）。

@@ -183,6 +183,14 @@ class AgentBrain:
             logger.warning(f"达到最大思考轮次 {self.max_iterations}，强制完成")
             thought.status = ThoughtStatus.COMPLETE
 
+        # 通知电脑前端回复结束（非流式路径）
+        if message.source == "computer":
+            try:
+                from backend.routes.computer_routes import send_done_to_computer
+                await send_done_to_computer()
+            except Exception:
+                pass
+
         return thought
 
     async def _think_with_tools(
@@ -912,6 +920,14 @@ class AgentBrain:
         if full_reply_parts:
             await self._store_streaming_reply(message, full_reply_parts)
 
+        # 通知电脑前端回复结束
+        if message.source == "computer":
+            try:
+                from backend.routes.computer_routes import send_done_to_computer
+                await send_done_to_computer()
+            except Exception:
+                pass
+
         return thought
 
     def _convert_api_tool_calls(self, delta_list: list[dict]) -> list[dict]:
@@ -946,7 +962,10 @@ class AgentBrain:
             return
 
         # 确定参数
-        if message.source == "discord":
+        if message.source == "computer":
+            user_id = "robot"
+            source_type = "computer_chat"
+        elif message.source == "discord":
             user_id = "robot"
             if message.group_id.startswith("dm_"):
                 source_type = "discord_private"
