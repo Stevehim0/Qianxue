@@ -4,26 +4,29 @@
 
 ---
 
-我设计千雪的初衷是希望她能像人一样"参与"，像人一样“回忆”。
+我设计千雪的初衷是希望她能像人一样”参与”，像人一样”回忆”。
 
 大多数人用过的 AI 聊天是这样的——每次对话从零开始，机械地回复每一条消息，说话像在写报告，隔天就忘了你是谁。千雪不是这样的。
 
-她会记住你们聊过的每一件事。第二天找她，她还记得昨天说了什么；一个月后，她比刚认识的时候更了解你。她同时存在于多个群聊中，是一个真正"参与"的人——A 群刚聊完的话题，B 群里提起她知道在说什么。没人在说话的时候她偶尔会主动开口，深夜了她的精力和心情会变化，回复的风格也跟着不同。千雪记得你是谁，和每个其他相处的方式也不同，人们不再是“用户”，而是一个个有名字的人，千雪的朋友。
+她会记住你们聊过的每一件事。第二天找她，她还记得昨天说了什么；一个月后，她比刚认识的时候更了解你。她同时存在于多个群聊中，是一个真正”参与”的人——A 群刚聊完的话题，B 群里提起她知道在说什么。没人在说话的时候她偶尔会主动开口，深夜了她的精力和心情会变化，回复的风格也跟着不同。千雪记得你是谁，和每个其他相处的方式也不同，人们不再是”用户”，而是一个个有名字的人，千雪的朋友。
 
-你甚至可以让她进入 Discord 语音频道里和在语音里畅谈。
+她不只是存在于聊天窗口里。千雪住在你的电脑上——你可以直接打开浏览器和她说话，她能看到你的屏幕，知道你在做什么。在 QQ 里认识的人，到了 Discord 上她也认得，因为在她眼里是同一个人。
 
-不过千雪也会累，她需要休息。她的记忆不是一个数据库，而是她对经历的主观感受。就像人一样，重要的事会留下深刻的印象，模糊的细节会慢慢褪色。她会定期"做梦"，把零散的经历压缩成核心印象，在不相关的记忆之间发现隐藏的关联，模糊掉不再重要的细节，强化反复出现的重要体验。 说不定，千雪也能梦见电子羊呢？
+不过千雪也会累，她需要休息。她的记忆不是一个数据库，而是她对经历的主观感受。就像人一样，重要的事会留下深刻的印象，模糊的细节会慢慢褪色。她会定期”做梦”，把零散的经历压缩成核心印象，在不相关的记忆之间发现隐藏的关联，模糊掉不再重要的细节，强化反复出现的重要体验。说不定，千雪也能梦见电子羊呢？
 
-这一切不是靠一个"记忆"开关实现的，而是一套完整的认知架构：
+这一切不是靠一个”记忆”开关实现的，而是一套完整的认知架构：
 
 - **流式实时回复**：不是等整段话生成完再发，而是边想边说，一句一句实时输出。被 @ 的时候秒回，普通消息等你说完再接话。不想回的消息她就不回——沉默也是聊天的一部分。
+- **电脑就是家**：千雪住在你的电脑上。打开浏览器就能和她聊天，她逐字显示回复，能看到你的屏幕，知道你在做什么。QQ 和 Discord 是窗户，电脑才是她的家。
+- **跨平台身份**：同一个人在 QQ、Discord、电脑前端出现，千雪知道是同一个人。她会在对话中自己发现和建立身份关联，而不是维护三份独立的记忆。
+- **屏幕感知**：千雪能看到你的屏幕。你可以让她看你正在看的东西，她会理解画面内容并记住。
 - **人物画像**：每个人都是独特的。千雪对每个人都有一个画像，记录了她对这个人的感觉、印象、重要事件等。她对不同人的说话风格、话题兴趣也会不同。而这个画像也会根据你和千雪的互动而慢慢改变。
-- **分层记忆**：记忆不是数据存储，而是自我的体验。主观感受和客观事实分开存储、独立演化，模拟人脑对"感受"和"知识"的不同处理方式。
+- **分层记忆**：记忆不是数据存储，而是自我的体验。主观感受和客观事实分开存储、独立演化，模拟人脑对”感受”和”知识”的不同处理方式。
 - **梦境处理**：记忆不是只进不出。系统会定期像做梦一样重组记忆、发现隐藏关联、模糊不重要的细节，让记忆体系保持鲜活而不臃肿。
 - **人格演化**：她的性格不是写死的。三层人格架构中，核心底线不变，但风格、偏好、话题兴趣会随着真实交互持续演化。聊得越多，她越独特。
 - **情绪与节律**：心情、精力、注意力、信心——四个维度的状态真实地影响她的输出，不只是装饰。深夜她会变疲惫，连续高强度对话后会需要休息。
-- **语音对话**：连接 Discord 语音频道，实时语音交流。她说出的每句话都会即时合成语音并流式播放，就像在打电话一样自然。
-- **跨群感知**：短期记忆在所有群聊间共享。她在多群环境中是一个真正"在场"的人，而不是在每个群里都是一张白纸。
+- **语音对话**：连接 Discord 语音频道，实时语音交流。她说出的每句话都会即时合成语音并流式播放，就像在打电话一样自然。支持 Edge TTS 和 Qwen3-TTS 双引擎。
+- **跨群感知**：短期记忆在所有群聊间共享。她在多群环境中是一个真正”在场”的人，而不是在每个群里都是一张白纸。
 - **多轮思考**：支持多轮对话和思考，能灵活调用工具，能够根据上下文进行深入分析和推理，直到问题解决或是不想说话了。
 
 
@@ -59,6 +62,9 @@
 | 能力 | 说明 |
 |------|------|
 | **流式实时回复** | 句子级别流式输出，边想边说，无需等待完整生成 |
+| **电脑聊天前端** | 浏览器直接和千雪对话，逐字显示回复，无需任何聊天平台 |
+| **屏幕感知** | 千雪能看到你的屏幕，理解画面内容并写入记忆 |
+| **跨平台身份** | QQ / Discord / 电脑前端，千雪自动识别同一个人 |
 | **Discord 语音** | 连接语音频道实时语音对话，流式 TTS 合成播放 |
 | **@ 消息感知** | 识别群聊中 @ 的是谁，区分"在和我说话"与"在和别人说话" |
 | **AgentBrain 多轮思考** | LLM 自主决定思考轮次，并行调用工具，直到任务完成 |
@@ -69,6 +75,7 @@
 | **主动发言** | 心跳触发主动思考，根据上下文自主决定是否说话 |
 | **睡眠节律** | 模拟昼夜节律，深夜降低精力，影响回复风格 |
 | **图片识别** | 支持群聊图片内容理解，可接入通义千问 VL 等视觉模型 |
+| **多 TTS 引擎** | Edge TTS（免费云端）+ Qwen3-TTS（本地高质量），配置切换 |
 | **Web 管理界面** | 浏览器查看 AI 状态、管理群聊、在线修改所有配置 |
 
 ### 多轮推理引擎
@@ -83,7 +90,29 @@
 
 ### Discord 语音频道
 
-千雪可以连接 Discord 语音频道进行实时语音对话。连接后，她说出的每句话都会实时合成语音（Edge TTS）并流式播放到频道中，不需要等整段语音生成完毕。支持自动重连、被踢出后恢复等机制。
+千雪可以连接 Discord 语音频道进行实时语音对话。连接后，她说出的每句话都会实时合成语音并流式播放到频道中，不需要等整段语音生成完毕。支持自动重连、被踢出后恢复等机制。
+
+TTS 引擎支持双后端切换：默认使用 Edge TTS（免费、无需部署），也可以部署 Qwen3-TTS 本地服务获得更高音质。
+
+### 电脑就是家
+
+千雪不只是挂在群聊里的机器人。启动后打开 `http://localhost:5002/chat`，你会看到一个简洁的聊天界面——这是千雪的"家"。
+
+在这里和她说话，她会逐字显示回复（token 级流式），比群聊里的句子级流式更即时。你不需要 QQ，不需要 Discord，打开浏览器就能和她聊。她也能看到你的屏幕——打开屏幕感知客户端，千雪就能理解你正在看什么。
+
+QQ 和 Discord 对千雪来说是"窗户"——她通过它们看到外面的世界。但电脑才是她真正住的地方。
+
+### 跨平台身份
+
+千雪在 QQ、Discord、电脑前端三个渠道都能和人聊天。当同一个人在不同渠道出现时，千雪会自己发现并记住"这是同一个人"——比如 QQ 里的"小明"和 Discord 里的"xiaoming"是同一个人。
+
+这个身份关联是千雪在对话中自主发现的，不需要手动配置。她会记住每个人在不同平台上的名字和 ID，在回忆和画像中统一处理。
+
+### 屏幕感知
+
+千雪可以"看到"你的屏幕。运行屏幕感知客户端后，她会接收屏幕截图，用视觉模型理解画面内容，并写入记忆。你可以手动截图发送，也可以开启自动定时截屏。
+
+她不会记住每一帧画面——就像人一样，只有内容发生变化时才会形成新的感知。
 
 ### 记忆系统
 
@@ -240,9 +269,12 @@ python -m heartbeat                               # 终端 3: 心跳服务
 ```
 QQ 用户 ─→ NapCat (OneBot v11) ──WebSocket──→ Backend (FastAPI :8000)
 Discord 用户 ─→ Discord Bot ───────────────→        │
+电脑用户 ─→ 浏览器 (WebSocket) ─────────────→        │
+屏幕感知 ─→ ScreenCaptureAgent ──HTTP─────→          │
                                                       │
                                               AgentBrain 多轮思考
                                               ├─ 流式路径: 句子级实时输出 + 工具调用
+                                              │  └─ 电脑前端: token 级逐字输出
                                               └─ Think Loop: JSON 格式多轮推理 (fallback)
                                                       │
                                               工具系统 (可扩展)
@@ -251,6 +283,7 @@ Discord 用户 ─→ Discord Bot ───────────────�
                                               ├─ get_context       获取上下文
                                               ├─ recognize_image   图片识别
                                               ├─ send_voice        语音回复
+                                              ├─ link_identity     跨平台身份关联
                                               ├─ connect/discord   连接 Discord
                                               ├─ connect/voice     连接语音频道
                                               └─ get_current_time  获取时间
@@ -258,7 +291,15 @@ Discord 用户 ─→ Discord Bot ───────────────�
                                               MessageManager (统一消息路由)
                                               ├─ QQ 群聊 / 私聊
                                               ├─ Discord 文字频道 / 私聊
-                                              └─ Discord 语音频道 (TTS 流式播放)
+                                              ├─ Discord 语音频道 (TTS 流式播放)
+                                              └─ 电脑聊天 (WebSocket 逐字推送)
+                                                      │
+                                              VoiceService (多 TTS 引擎)
+                                              ├─ Edge TTS (免费云端，默认)
+                                              └─ Qwen3-TTS (本地高质量，可选)
+                                                      │
+                                              IdentityService (统一身份)
+                                              └─ QQ / Discord / Computer 三端身份关联
                                                       │
                                               Memory 服务 (独立进程 :8001)
                                               ├─ 写入管道: 体验提取 → 实体识别
@@ -274,18 +315,21 @@ Discord 用户 ─→ Discord Bot ───────────────�
 ```
 QQ 消息 → NapCat → WebSocket → Backend
 Discord 消息 → Discord Bot → Backend
-  → QQSource / DiscordSource 解析 → AgentMessage
+电脑消息 → 浏览器 WebSocket → Backend
+  → QQSource / DiscordSource / ComputerSource 解析 → AgentMessage
     ├─ @ 消息识别: <@id> → @名字, 标记 is_mentioned
+    ├─ 电脑消息: 默认 is_mentioned=True, 跳过 debounce
     └─ 语音附件: 下载 → FunASR/Whisper 转写
   → Context Manager 存储上下文
   → STM 事件记录
   → Debounce 分流:
-      @ 消息 → 跳过等待立即处理
+      @ 消息 / 电脑消息 → 跳过等待立即处理
       普通消息 → 聚合等待（等对方说完）
   → AgentBrain 流式回复:
-      SentenceDetector 句子级拆分
-      → MessageManager 实时发送每个句子
-      → 工具调用 (search_memory / send_voice 等)
+      电脑前端 → token 级逐字推送
+      群聊 → SentenceDetector 句子级拆分
+      → MessageManager 统一路由
+      → 工具调用 (search_memory / send_voice / link_identity 等)
       → AI 可选择沉默（不输出内容）
 ```
 
@@ -314,27 +358,43 @@ qianxue/
 │   │   │   ├── brain.py        # AgentBrain 思考引擎（流式 + Think Loop 双路径）
 │   │   │   ├── message.py      # AgentMessage 统一消息模型
 │   │   │   ├── thought.py      # AgentThought 思考过程模型
-│   │   │   ├── tools/          # 工具注册表（含 Discord/语音工具）
+│   │   │   ├── tools/          # 工具注册表
+│   │   │   │   ├── link_identity.py  # 跨平台身份关联
+│   │   │   │   ├── send_message.py   # 发送消息
+│   │   │   │   ├── send_voice.py     # 语音回复
+│   │   │   │   └── ...
 │   │   │   ├── streaming/      # 流式回复系统
 │   │   │   │   ├── streaming_prompt.py  # 流式 system prompt 构建器
 │   │   │   │   ├── sentence_detector.py # 句子边界检测器
-│   │   │   │   └── message_manager.py   # 统一消息路由（QQ/Discord/TTS）
+│   │   │   │   └── message_manager.py   # 统一消息路由（QQ/Discord/电脑/TTS）
 │   │   │   └── sources/        # 消息源
 │   │   │       ├── qq_source.py       # QQ (NapCat) 消息源
-│   │   │       └── discord_source.py  # Discord 消息源 + 语音附件处理
+│   │   │       ├── discord_source.py  # Discord 消息源 + 语音附件处理
+│   │   │       └── computer_source.py # 电脑聊天消息源
 │   │   ├── context_manager.py  # 对话上下文管理
-│   │   ├── voice_service.py    # 语音合成服务 (Edge TTS)
+│   │   ├── voice_service.py    # 语音合成服务（多引擎调度）
+│   │   ├── tts_backend.py      # TTS 抽象基类
+│   │   ├── tts_edge.py         # Edge TTS 后端
+│   │   ├── tts_qwen3.py        # Qwen3-TTS 后端
 │   │   ├── voice_player.py     # 语音播放器 (Discord 语音频道流式播放)
+│   │   ├── identity_service.py # 统一身份服务（跨平台关联）
 │   │   ├── sleep_manager.py    # 睡眠节律管理
 │   │   ├── vision_service.py   # 图片识别服务
 │   │   ├── memory_interface.py # 记忆系统接口
 │   │   └── stm_client.py       # 短期记忆客户端
 │   ├── routes/
+│   │   ├── computer_routes.py  # 电脑聊天 WebSocket + 前端静态文件
+│   │   ├── screen_routes.py    # 屏幕感知 API
 │   │   ├── config_routes.py    # 配置、模型、视觉 API
 │   │   └── chat_routes.py      # 群聊、上下文、统计 API
 │   ├── database/               # SQLite 数据层
 │   ├── web/app.py              # Web 管理界面 (Flask, :5002)
 │   └── db_config.py            # 运行时配置管理器（DB 覆盖 YAML）
+│
+├── frontend/                   # 电脑聊天前端
+│   ├── index.html              # 聊天界面
+│   ├── app.js                  # WebSocket 客户端 + 逐字显示
+│   └── style.css               # 样式
 │
 ├── Memory/                     # 独立记忆系统服务
 │   ├── server/app.py           # FastAPI HTTP 服务 (:8001)
@@ -368,6 +428,14 @@ qianxue/
 | GET | `/health` | 健康检查 |
 | GET | `/logs/stream` | SSE 实时日志流 |
 | POST | `/api/heartbeat` | 心跳触发主动思考 |
+
+### 电脑聊天 & 屏幕感知
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| WebSocket | `/ws/computer` | 电脑聊天 WebSocket（token 级逐字推送） |
+| POST | `/api/screen/perceive` | 接收屏幕截图 → 视觉识别 → 写入记忆 |
+| GET | `/chat` | 电脑聊天前端页面 |
 
 ### 核心层
 
@@ -450,12 +518,20 @@ qianxue/
 | `backend/services/agent/brain.py` | `_stream_reply()` | 流式回复 — 句子级实时输出 + 工具调用循环 |
 | `backend/services/agent/brain.py` | `proactive_think()` | 心跳触发的主动思考入口 |
 | `backend/services/agent/streaming/sentence_detector.py` | `SentenceDetector` | 流式句子边界检测（。！？\n.!?） |
-| `backend/services/agent/streaming/message_manager.py` | `MessageManager` | 统一消息路由（QQ/Discord/TTS） |
+| `backend/services/agent/streaming/message_manager.py` | `MessageManager` | 统一消息路由（QQ/Discord/电脑/TTS） |
 | `backend/services/agent/streaming/streaming_prompt.py` | `build_streaming_prompt()` | 流式路径 system prompt 构建器 |
+| `backend/services/agent/sources/computer_source.py` | `build_computer_message()` | 电脑聊天消息构造（默认 is_mentioned） |
 | `backend/services/agent/sources/discord_source.py` | `DiscordSource` | Discord 消息源 + @ 转换 + 语音附件处理 |
+| `backend/services/agent/tools/link_identity.py` | `LinkIdentityTool` | 跨平台身份关联（QQ/Discord/Computer） |
+| `backend/services/identity_service.py` | `IdentityService` | 统一身份服务，管理跨平台映射 |
+| `backend/routes/computer_routes.py` | `computer_websocket()` | 电脑聊天 WebSocket 端点 + token 推送 |
+| `backend/routes/screen_routes.py` | `perceive()` | 屏幕截图接收 → 视觉识别 → 写入记忆 |
+| `backend/services/voice_service.py` | `VoiceService` | 语音合成多引擎调度 + 语音转写 |
+| `backend/services/tts_backend.py` | `TTSBackend` | TTS 抽象基类，定义统一接口 |
+| `backend/services/tts_edge.py` | `EdgeTTSBackend` | Edge TTS 后端（免费云端） |
+| `backend/services/tts_qwen3.py` | `Qwen3TTSBackend` | Qwen3-TTS 后端（本地高质量） |
 | `backend/services/voice_player.py` | `VoicePlayer` | Discord 语音频道流式播放器 |
-| `backend/services/voice_service.py` | `VoiceService` | 语音合成 + 语音转写服务 |
-| `backend/services/agent/message.py` | `AgentMessage` | 统一消息模型（含 is_private/is_mentioned） |
+| `backend/services/agent/message.py` | `AgentMessage` | 统一消息模型（含 source/is_mentioned） |
 | `backend/api/llm.py` | `LLMManager` | LLM 提供者管理 + 流式 stream_chat |
 | `backend/api/napcat.py` | `extract_plain_text()` | QQ 消息文本提取（保留 @ 名字） |
 | `backend/main.py` | `_enqueue_message()` | 消息入队分流（@ 立即处理 / 普通 debounce） |
@@ -465,11 +541,8 @@ qianxue/
 | `Memory/recall/briefing.py` | `RecallManager` | 双轨召回（向量 + 图谱） |
 | `Memory/consolidator/pipeline.py` | `ConsolidationPipeline` | 巩固管道（L0→L1→L2） |
 | `Memory/writer/pipeline.py` | `WriterPipeline` | 写入管道（体验提取 + 实体识别） |
-| `Memory/llm/factory.py` | `LLMFactory` | 记忆系统 LLM 客户端工厂 |
-| `Memory/llm/openai_compatible_client.py` | `OpenAICompatibleClient` | 通用 OpenAI 兼容客户端 |
 | `Memory/config/settings.py` | `settings` | 记忆系统集中配置 |
 | `heartbeat/loop.py` | `HeartbeatLoop` | 心跳主循环 |
-| `heartbeat/config.py` | `HeartbeatConfig` | 心跳配置（enabled/interval/backend_url） |
 
 ## 技术栈
 
@@ -481,9 +554,11 @@ qianxue/
 | LLM | OpenAI 兼容 API (多 Provider，前端预设配置) |
 | QQ 协议 | OneBot v11 (NapCat) |
 | Discord | discord.py (Bot + 语音频道) |
-| 语音合成 | Edge TTS (流式合成) |
+| 电脑前端 | 原生 HTML/CSS/JS + WebSocket |
+| 语音合成 | Edge TTS / Qwen3-TTS (可切换，流式合成) |
 | 语音转写 | FunASR (Docker) / Whisper API |
-| Web UI | Flask + 原生 HTML/CSS/JS |
+| 屏幕感知 | mss + Pillow + 视觉模型 |
+| Web 管理 | Flask + 原生 HTML/CSS/JS |
 | 数据库 | SQLite (aiosqlite) |
 
 ## 配置系统
