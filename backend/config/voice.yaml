@@ -6,10 +6,16 @@ funasr:
   timeout: 30                                # ASR 调用超时（秒）
 
 tts:
-  default_voice: "zh-CN-XiaoxiaoNeural"      # Edge-TTS 默认音色（晓晓，温暖活泼，适合千雪人设 per D-01）
+  backend: "qwen3"                            # TTS 引擎: "edge" (Edge TTS 云端) | "qwen3" (Qwen3-TTS 本地，WSL2+GPU)
+  default_voice: "zh-CN-XiaoxiaoNeural"      # Edge-TTS 默认音色
   timeout: 30                                # TTS 调用超时（秒）
   rate: "+0%"                                # 语速调整
   volume: "+0%"                              # 音量调整
+
+qwen3:
+  api_url: "http://localhost:8880"            # Qwen3-TTS OpenAI 兼容 API 地址
+  model: "tts-1-zh"                          # 模型名
+  voice: "Serena"                            # 音色: Vivian(明亮少女) | Serena(温柔少女) | 等
 
 audio:
   target_sample_rate: 16000                  # FunASR 要求的采样率

@@ -17,20 +17,20 @@ for var in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY
 # Discord 代理 — 只让后端的 Discord 连接走代理，其他服务直连
 DISCORD_PROXY = os.environ.get("QIANXUE_DISCORD_PROXY", "")
 
-PYTHON = os.environ.get("QIANXUE_PYTHON", sys.executable)
+PYTHON = os.environ.get("QIANXUE_PYTHON", "D:/Miniconda/envs/SpaceX/python.exe")
 
 SERVICES = [
-    # FunASR 语音识别 Server — 暂时禁用，本地实时语音不需要 Docker ASR
-    # {"name": "FunASR Server", "tag": "ASR", "color": "35", "delay": 0,
-    #  "cmd": ["docker", "run", "--rm", "--name", "funasr-server",
-    #          "-p", "10095:10095",
-    #          "-v", "funasr-models:/workspace/models",
-    #          "registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13",
-    #          "/workspace/FunASR/runtime/websocket/build/bin/funasr-wss-server",
-    #          "--download-model-dir", "/workspace/models",
-    #          "--model-dir", "damo/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-onnx",
-    #          "--vad-dir", "damo/speech_fsmn_vad_zh-cn-16k-common-onnx",
-    #          "--punc-dir", "damo/punc_ct-transformer_cn-en-common-vocab471067-large-onnx"]},
+    # FasterQwenTTS — CUDA Graphs 加速, RTF ~2.2x, 流式 PCM
+    {"name": "FasterQwenTTS", "tag": "TTS", "color": "35", "delay": 0,
+     "wsl": True,
+     "wsl_cmd": (
+         "source /home/qianxue/miniconda/etc/profile.d/conda.sh && "
+         "conda activate tts && "
+         "cd /mnt/d/Code/Qianxue-master-git && "
+         "HF_ENDPOINT=https://hf-mirror.com "
+         "python tts_server.py --host 0.0.0.0 --port 8880"
+     )},
+
     {"name": "Memory API",  "tag": "MEM",  "color": "36", "delay": 0,
      "cmd": [PYTHON, "-m", "Memory.server"]},
     {"name": "Backend API", "tag": "API",  "color": "32", "delay": 0,
@@ -46,6 +46,15 @@ MEM_READY_FLAG = asyncio.Event()
 
 processes: dict[str, asyncio.subprocess.Process] = {}
 shutting_down = False
+
+
+def _handle_sigint(signum, frame):
+    """Ctrl+C: 立即设置关闭标志，防止子进程退出后被自动重启。"""
+    global shutting_down
+    shutting_down = True
+    raise KeyboardInterrupt
+
+signal.signal(signal.SIGINT, _handle_sigint)
 
 
 def tag(svc):
@@ -103,16 +112,83 @@ async def run_service(svc: dict):
     if svc["delay"]:
         await asyncio.sleep(svc["delay"])
     while not shutting_down:
+        # WSL 服务：通过 wsl 命令在 Ubuntu 中启动
+        if svc.get("wsl"):
+            for attempt in range(3):
+                if shutting_down:
+                    return
+                env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+                       "MSYS_NO_PATHCONV": "1", **svc.get("env", {})}
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        "wsl", "-d", "Ubuntu", "--", "bash", "-c", svc["wsl_cmd"],
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                        env=env,
+                    )
+                except FileNotFoundError:
+                    print(f"{tag(svc)} {svc['name']} 启动失败: wsl 命令不可用，跳过此服务")
+                    return
+                processes[svc["tag"]] = proc
+                print(f"{tag(svc)} {svc['name']} started via WSL (PID {proc.pid})")
+                cancelled = False
+                try:
+                    while True:
+                        line = await proc.stdout.readline()
+                        if not line:
+                            break
+                        text = line.decode("utf-8", errors="replace").rstrip()
+                        if text:
+                            print(f"{tag(svc)} {text}")
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    cancelled = True
+                finally:
+                    # 杀 wsl.exe 包装进程
+                    try:
+                        proc.terminate()
+                    except ProcessLookupError:
+                        pass
+                    # 杀 WSL 内部的 Python 进程
+                    try:
+                        subprocess.run(
+                            'wsl -d Ubuntu -- bash -c "pkill -f api.main"',
+                            shell=True, timeout=10, capture_output=True
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=5)
+                    except (asyncio.TimeoutError, asyncio.CancelledError):
+                        try:
+                            proc.kill()
+                        except ProcessLookupError:
+                            pass
+                    processes.pop(svc["tag"], None)
+                if cancelled or shutting_down:
+                    return
+                if proc.returncode is not None and not shutting_down:
+                    if attempt < 2:
+                        print(f"{tag(svc)} {svc['name']} exited (code {proc.returncode}), restarting in 3s...")
+                        for _ in range(30):
+                            if shutting_down:
+                                return
+                            await asyncio.sleep(0.1)
+                        if shutting_down:
+                            return
+                    else:
+                        print(f"{tag(svc)} {svc['name']} exited (code {proc.returncode}), giving up after 3 attempts")
+            break
         # limit restart attempts
         for attempt in range(3):
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
-                   "MSYS_NO_PATHCONV": "1"}
+                   "MSYS_NO_PATHCONV": "1", **svc.get("env", {})}
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *svc["cmd"],
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                     env=env,
+                    cwd=svc.get("cwd"),
                 )
             except FileNotFoundError:
                 print(f"{tag(svc)} {svc['name']} 启动失败: 找不到命令 '{svc['cmd'][0]}'，跳过此服务")
@@ -128,18 +204,23 @@ async def run_service(svc: dict):
                     text = line.decode("utf-8", errors="replace").rstrip()
                     if text:
                         print(f"{tag(svc)} {text}")
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, KeyboardInterrupt):
                 cancelled = True
                 proc.terminate()
             finally:
                 await proc.wait()
                 processes.pop(svc["tag"], None)
-            if cancelled:
+            if cancelled or shutting_down:
                 return
             if proc.returncode is not None and not shutting_down:
                 if attempt < 2:
                     print(f"{tag(svc)} {svc['name']} exited (code {proc.returncode}), restarting in 3s...")
-                    await asyncio.sleep(3)
+                    for _ in range(30):
+                        if shutting_down:
+                            return
+                        await asyncio.sleep(0.1)
+                    if shutting_down:
+                        return
                 else:
                     print(f"{tag(svc)} {svc['name']} exited (code {proc.returncode}), giving up after 3 attempts")
         break
@@ -151,7 +232,16 @@ async def shutdown():
     import subprocess
     print("\n\033[31m[SYS] Shutting down...\033[0m")
 
-    # 1. 通知后端优雅关闭（断开 Discord/数据库等外部连接）
+    # 1. 先杀 WSL 里的 TTS（最难清理，放最前面）
+    try:
+        subprocess.run(
+            'wsl -d Ubuntu -- bash -c "pkill -9 -f api.main"',
+            shell=True, timeout=5, capture_output=True
+        )
+    except Exception:
+        pass
+
+    # 2. 通知后端优雅关闭
     import urllib.request
     import urllib.error
     try:
@@ -162,67 +252,56 @@ async def shutdown():
     except Exception:
         pass
 
-    # 2. 等后端进程退出（它需要时间断开 Discord、关数据库）
+    # 3. 等后端进程退出
     api_proc = processes.get("API")
     if api_proc:
         try:
-            await asyncio.wait_for(api_proc.wait(), timeout=8)
+            await asyncio.wait_for(api_proc.wait(), timeout=5)
             print("[SYS] 后端已退出")
         except asyncio.TimeoutError:
-            api_proc.kill()
-
-    # 3. 终止其余所有子进程
-    for tag, proc in processes.items():
-        if tag == "API":
-            continue  # 已经处理过
-        try:
-            proc.terminate()
-        except ProcessLookupError:
-            pass
-
-    for tag, proc in processes.items():
-        if tag == "API":
-            continue
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=5)
-        except asyncio.TimeoutError:
             try:
-                proc.kill()
+                api_proc.kill()
             except ProcessLookupError:
                 pass
 
-    # 4. 强制清理残留进程 — 按端口
-    for port in (8000, 8001, 5001, 5002):
+    # 4. 终止其余所有子进程（不卡在 wait 上）
+    for tag, proc in list(processes.items()):
+        if tag == "API":
+            continue
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+    processes.clear()
+
+    # 5. 按端口强制清理残留
+    for port in (8000, 8001, 5001, 5002, 8880):
         try:
             result = subprocess.run(
                 f'netstat -ano | findstr ":{port} " | findstr LISTENING',
-                shell=True, capture_output=True, text=True, timeout=5
+                shell=True, capture_output=True, text=True, timeout=3
             )
             for line in result.stdout.strip().split('\n'):
                 parts = line.split()
                 if parts:
                     pid = parts[-1]
                     if pid.isdigit():
-                        subprocess.run(f'taskkill /F /PID {pid}', shell=True, timeout=5)
+                        subprocess.run(f'taskkill /F /PID {pid}', shell=True, timeout=3)
         except Exception:
             pass
 
-    # 5. 强制杀所有 python 子进程（兜底）
-    try:
-        subprocess.run('taskkill /F /IM python.exe', shell=True, timeout=5, capture_output=True)
-    except Exception:
-        pass
-
-    # 6. 清理 Docker 容器
-    try:
-        subprocess.run('docker rm -f funasr-server', shell=True, timeout=10, capture_output=True)
-    except Exception:
-        pass
+    # 6. 按进程 PID 强制清理残留子进程（兜底，不杀无关 Python）
+    for pid in [p.pid for p in processes.values() if hasattr(p, 'pid')]:
+        try:
+            subprocess.run(f'taskkill /F /PID {pid}', shell=True, timeout=3, capture_output=True)
+        except Exception:
+            pass
 
     print("\033[31m[SYS] All services stopped.\033[0m")
 
 
 async def main():
+    global shutting_down
     print("\033[1m========================================")
     print("  Qianxue AI QQ Chatbot - Start All")
     print("========================================\033[0m\n")
@@ -233,15 +312,17 @@ async def main():
   Backend Web:  http://localhost:5002
   Memory API:   http://localhost:8001
   Memory Web:   http://localhost:5001
-  FunASR ASR:   ws://localhost:10095
+  Qwen3-TTS:    http://localhost:8880
+  Local Chat:   http://localhost:8000/chat
   Press Ctrl+C to stop all services\033[0m
 """)
 
     try:
         await asyncio.gather(*tasks)
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, KeyboardInterrupt):
         pass
     finally:
+        shutting_down = True
         await shutdown()
 
 

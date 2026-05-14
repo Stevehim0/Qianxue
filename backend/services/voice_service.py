@@ -1,4 +1,4 @@
-"""Voice服务模块 - ASR (FunASR) + TTS (Edge-TTS) + 音频格式转换."""
+"""Voice服务模块 - ASR (FunASR) + TTS (可切换后端) + 音频格式转换."""
 
 import logging
 import io
@@ -24,15 +24,39 @@ class VoiceError(Exception):
 
 
 class VoiceService:
-    """Voice 服务 - 语音识别 (FunASR) + 语音合成 (Edge-TTS)"""
+    """Voice 服务 - 语音识别 (FunASR) + 语音合成 (可切换 TTS 后端)"""
 
     def __init__(self):
         self.config = config_manager.get_voice_config()
         self.client = httpx.AsyncClient(timeout=120.0)
+        self._tts = self._init_tts_backend()
+
+    def _init_tts_backend(self):
+        """根据配置选择 TTS 后端."""
+        backend = settings.voice.tts_backend
+        if backend == "qwen3":
+            from .tts_qwen3 import Qwen3TTSBackend
+            logger.info(f"TTS 后端: Qwen3-TTS ({settings.voice.qwen3_tts_url})")
+            return Qwen3TTSBackend(
+                api_url=settings.voice.qwen3_tts_url,
+                model=settings.voice.qwen3_tts_model,
+                voice=settings.voice.qwen3_tts_voice,
+                timeout=settings.voice.tts_timeout,
+            )
+        else:
+            from .tts_edge import EdgeTTSBackend
+            logger.info(f"TTS 后端: Edge TTS (voice={settings.voice.tts_default_voice})")
+            return EdgeTTSBackend(
+                default_voice=settings.voice.tts_default_voice,
+                rate=settings.voice.tts_rate,
+                volume=settings.voice.tts_volume,
+                timeout=settings.voice.tts_timeout,
+            )
 
     def reload_config(self):
-        """重新加载配置（从 config_manager 刷新）"""
+        """重新加载配置（从 config_manager 刷新）."""
         self.config = config_manager.get_voice_config()
+        self._tts = self._init_tts_backend()
         logger.info("Voice配置已重新加载")
 
     # ------------------------------------------------------------------
@@ -286,37 +310,27 @@ class VoiceService:
             return result_text
 
     # ------------------------------------------------------------------
-    # TTS: 文字转语音 (Edge-TTS)
+    # TTS: 文字转语音（委托给可配置的后端）
     # ------------------------------------------------------------------
 
     async def synthesize(self, text: str, voice: Optional[str] = None) -> bytes:
         """语音合成 -- 将文字转为音频.
 
-        Args:
-            text: 要合成的中文文字
-            voice: Edge-TTS 音色名称，默认使用 settings.voice.tts_default_voice
-
-        Returns:
-            MP3 音频 bytes
+        委托给当前配置的 TTS 后端（Edge TTS）。
+        Edge TTS 返回 MP3 bytes。
 
         Raises:
             VoiceError: TTS 失败时抛出
         """
-        import edge_tts
-
-        voice_name = voice or settings.voice.tts_default_voice
-        rate = settings.voice.tts_rate
-        volume = settings.voice.tts_volume
         timeout = settings.voice.tts_timeout
-
         try:
             audio_bytes = await asyncio.wait_for(
-                self._edge_tts_synthesize(text, voice_name, rate, volume),
+                self._tts.synthesize(text, voice),
                 timeout=timeout
             )
             if not audio_bytes:
                 raise VoiceError("TTS生成空音频")
-            logger.info(f"TTS合成成功: {len(audio_bytes)} bytes, voice={voice_name}")
+            logger.info(f"TTS合成成功: {len(audio_bytes)} bytes")
             return audio_bytes
         except VoiceError:
             raise
@@ -325,33 +339,35 @@ class VoiceService:
         except Exception as e:
             raise VoiceError(f"TTS失败: {e}")
 
-    async def _edge_tts_synthesize(self, text: str, voice: str, rate: str, volume: str) -> bytes:
-        """使用 Edge-TTS 合成语音，返回 MP3 bytes."""
-        import edge_tts
+    async def synthesize_chunks(self, text: str, voice: Optional[str] = None):
+        """流式 TTS — 边合成边 yield 音频 chunk.
 
-        communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
-        buffer = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buffer.write(chunk["data"])
-        return buffer.getvalue()
+        委托给当前配置的 TTS 后端。
+        Edge TTS yield MP3 chunk。
+        """
+        async for chunk in self._tts.synthesize_stream(text, voice):
+            yield chunk
 
     async def synthesize_stream(self, sentences: list[str], voice: Optional[str] = None) -> list[bytes]:
-        """流式 TTS — 逐句合成 MP3，返回句子级音频列表。
-
-        与 synthesize() 不同，这里每个句子独立合成，用于流式播放管道。
-        句子 N 播放时，调用方可提前开始合成句子 N+1（流水线并行）。
-        """
+        """流式 TTS — 逐句合成，返回句子级音频列表。"""
         results = []
         for sentence in sentences:
             if not sentence.strip():
                 continue
             try:
-                mp3 = await self.synthesize(sentence, voice)
-                results.append(mp3)
+                audio = await self.synthesize(sentence, voice)
+                results.append(audio)
             except VoiceError as e:
                 logger.warning(f"流式TTS跳过句子: {sentence[:30]}... 错误: {e}")
         return results
+
+    async def synthesize_stream_pcm(self, text: str, voice: Optional[str] = None):
+        """流式 TTS — yield 原始 PCM chunks（24kHz 16-bit mono LE）.
+
+        委托给 TTS 后端的 synthesize_stream_pcm()。
+        """
+        async for chunk in self._tts.synthesize_stream_pcm(text, voice):
+            yield chunk
 
 
 # 模块级单例

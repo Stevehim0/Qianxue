@@ -147,12 +147,16 @@ class VisionConfig:
 class VoiceConfig:
     funasr_websocket_url: str = "ws://localhost:10095"
     funasr_timeout: int = 30
+    tts_backend: str = "edge"
     tts_default_voice: str = "zh-CN-XiaoxiaoNeural"
     tts_timeout: int = 30
     tts_rate: str = "+0%"
     tts_volume: str = "+0%"
     audio_target_sample_rate: int = 16000
     audio_target_channels: int = 1
+    qwen3_tts_url: str = "http://localhost:8880"
+    qwen3_tts_model: str = "tts-1-zh"
+    qwen3_tts_voice: str = "Serena"
 
 
 @dataclass
@@ -450,15 +454,20 @@ class ConfigLoader:
         funasr = r.get("funasr", {})
         tts = r.get("tts", {})
         audio = r.get("audio", {})
+        qwen3 = r.get("qwen3", {})
         return VoiceConfig(
             funasr_websocket_url=funasr.get("websocket_url", "ws://localhost:10095"),
             funasr_timeout=funasr.get("timeout", 30),
+            tts_backend=tts.get("backend", "edge"),
             tts_default_voice=tts.get("default_voice", "zh-CN-XiaoxiaoNeural"),
             tts_timeout=tts.get("timeout", 30),
             tts_rate=tts.get("rate", "+0%"),
             tts_volume=tts.get("volume", "+0%"),
             audio_target_sample_rate=audio.get("target_sample_rate", 16000),
             audio_target_channels=audio.get("target_channels", 1),
+            qwen3_tts_url=qwen3.get("api_url", "http://localhost:8880"),
+            qwen3_tts_model=qwen3.get("model", "tts-1-zh"),
+            qwen3_tts_voice=qwen3.get("voice", "Serena"),
         )
 
     def _build_discord(self) -> DiscordConfig:

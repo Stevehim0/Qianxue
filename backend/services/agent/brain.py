@@ -246,8 +246,8 @@ class AgentBrain:
 请根据工具结果决定是否需要继续调用工具或完成回复。
 注意：search_memory 返回的内容仅供你参考，你需要自己判断其相关性，自然地融入回复中，不要照搬搜索结果。"""
 
-        # 从核心层构建 system prompt（并行获取 STM 感知 + 精力 + 情绪）
-        stm_perception_text, energy_label, mood_label = await self._fetch_context_state()
+        # 从核心层构建 system prompt（并行获取 STM 感知 + 精力 + 情绪 + 电脑前端状态）
+        stm_perception_text, energy_label, mood_label, computer_status = await self._fetch_context_state()
 
         system_prompt = build_system_prompt(
             identity=identity_loader.identity,
@@ -257,6 +257,7 @@ class AgentBrain:
             stm_perception=stm_perception_text,
             energy_label=energy_label,
             mood_label=mood_label,
+            computer_status=computer_status,
         )
 
         try:
@@ -313,8 +314,8 @@ class AgentBrain:
                 "tool_calls": []
             }
 
-    async def _fetch_context_state(self) -> tuple[str, str, str]:
-        """并行获取 STM 感知、精力标签、情绪标签。"""
+    async def _fetch_context_state(self) -> tuple[str, str, str, dict]:
+        """并行获取 STM 感知、精力标签、情绪标签、电脑前端状态。"""
         async def _get_stm():
             try:
                 from backend.services.stm_client import stm_client
@@ -339,10 +340,18 @@ class AgentBrain:
                 pass
             return "平静"
 
+        def _get_computer_status():
+            try:
+                from backend.routes.computer_routes import get_computer_status
+                return get_computer_status()
+            except Exception:
+                return {"online": False}
+
         stm, energy, mood = await asyncio.gather(
             _get_stm(), _get_energy(), _get_mood()
         )
-        return stm, energy, mood
+        computer_status = _get_computer_status()
+        return stm, energy, mood, computer_status
 
     def _parse_llm_response(self, response: str) -> Optional[dict]:
         """解析 LLM 响应为 JSON，兼容 markdown 代码块包裹。
@@ -395,11 +404,13 @@ class AgentBrain:
             tool = self.tool_registry.get(tool_name)
             desc = f"- {tool.name}: {tool.description}\n"
             if tool.arguments:
-                args_desc = ", ".join([
-                    f"{arg.name}({arg.type})"
-                    for arg in tool.arguments
-                ])
-                desc += f"  参数: {args_desc}\n"
+                arg_parts = []
+                for arg in tool.arguments:
+                    arg_str = f"{arg.name}({arg.type})"
+                    if arg.description:
+                        arg_str += f" — {arg.description}"
+                    arg_parts.append(arg_str)
+                desc += "  参数: " + ", ".join(arg_parts) + "\n"
             tools.append(desc)
         return "\n".join(tools)
 
@@ -412,7 +423,14 @@ class AgentBrain:
         sender = message.sender_nickname or "未知"
         time_str = now.strftime('%Y-%m-%d %H:%M:%S')
         header = "当前时间: " + time_str + " (" + weekday + ")" + chr(10)
-        header += "群聊ID: " + str(message.group_id) + chr(10)
+
+        # 群信息：优先显示群名
+        group_display = str(message.group_id)
+        group_name = napcat_client.get_group_name(str(message.group_id))
+        if group_name:
+            group_display = f"{group_name}（{message.group_id}）"
+        header += "当前群: " + group_display + chr(10)
+
         header += "用户ID: " + str(message.user_id) + chr(10)
         header += "发送者昵称: " + sender
 
@@ -421,16 +439,29 @@ class AgentBrain:
         if profile_text:
             header += "\n\n关于对方:\n" + profile_text
 
-        # 群聊中展示 @ 信息
+        # 群聊中展示 @ 信息（带QQ号，方便AI知道@谁）
         if not message.is_private and message.mentions:
             bot_name = "千雪"
-            mentioned_names = [m.get("name", "") for m in message.mentions if m.get("name")]
+            mentioned_info = []
+            for m in message.mentions:
+                qq = m.get("qq", "")
+                name = m.get("name", "")
+                if name:
+                    mentioned_info.append(f"{name}(QQ:{qq})" if qq else name)
             if message.is_mentioned:
                 header += f"\n这条消息是 @你（{bot_name}）的"
-            elif mentioned_names:
-                header += f"\n这条消息是 @{'、'.join(mentioned_names)} 的，不是 @你（{bot_name}）的"
+            elif mentioned_info:
+                header += f"\n这条消息是 @{'、'.join(mentioned_info)} 的，不是 @你（{bot_name}）的"
 
         content = message.content
+
+        # 回复引用上下文
+        if message.reply_content:
+            reply_who = message.reply_sender or "某人"
+            if message.reply_sender_id:
+                reply_who += f"(QQ:{message.reply_sender_id})"
+            header += f"\n[回复引用] {reply_who}: {message.reply_content}"
+
         # 有真实图片描述时，去掉 NapCat 附带的 [图片] 占位文本
         if message.has_image and message.image_description:
             import re
@@ -563,7 +594,12 @@ class AgentBrain:
                 formatted.append("- " + call_id + ": 执行失败")
             elif isinstance(result, dict) and "success" in result:
                 if result["success"]:
-                    formatted.append("- " + call_id + ": 已发送")
+                    # 优先展示有语义的结果字段（如 briefing），避免把内容吞掉
+                    content = result.get("briefing") or result.get("message") or result.get("data")
+                    if content:
+                        formatted.append("- " + call_id + ": " + str(content))
+                    else:
+                        formatted.append("- " + call_id + ": 已发送")
                 else:
                     error = result.get("error", "未知错误")
                     error_type = result.get("error_type", "")
@@ -666,9 +702,9 @@ class AgentBrain:
         """
         results = {}
 
-        # 分离 send_message/send_voice 和其他工具
-        send_msgs = [tc for tc in tool_calls if tc.tool_name in ("send_message", "send_voice")]
-        others = [tc for tc in tool_calls if tc.tool_name not in ("send_message", "send_voice")]
+        # 分离 send_message/send_voice/forward_message 和其他工具
+        send_msgs = [tc for tc in tool_calls if tc.tool_name in ("send_message", "send_voice", "forward_message")]
+        others = [tc for tc in tool_calls if tc.tool_name not in ("send_message", "send_voice", "forward_message")]
 
         # 其他工具并行执行
         if others:
@@ -703,8 +739,26 @@ class AgentBrain:
                 previous_results
             )
 
-            if "group_id" not in resolved_args:
-                resolved_args["group_id"] = message.group_id
+            # forward_message → 映射到 send_message
+            if tool_call.tool_name == "forward_message":
+                target = resolved_args.pop("target", message.group_id)
+                # 群名解析：尝试把群名转成群号
+                resolved_target = napcat_client.resolve_group_id(target)
+                if resolved_target is None:
+                    tool_call.status = ToolCallStatus.FAILED
+                    logger.warning(f"forward_message 无法解析目标: {target}")
+                    return {"success": False, "error": f"找不到群「{target}」，请确认群名是否正确"}
+                # 校验群号：太短说明被截断了
+                clean = resolved_target.replace("private_", "")
+                if clean.isdigit() and len(clean) < 6:
+                    tool_call.status = ToolCallStatus.FAILED
+                    logger.warning(f"forward_message 群号疑似被截断: {target} → {resolved_target}")
+                    return {"success": False, "error": f"群号太短，请用群名而不是群号"}
+                resolved_args["group_id"] = resolved_target
+                tool_call.tool_name = "send_message"
+            else:
+                if "group_id" not in resolved_args:
+                    resolved_args["group_id"] = message.group_id
             if "user_id" not in resolved_args:
                 resolved_args["user_id"] = message.user_id
 
@@ -806,15 +860,17 @@ class AgentBrain:
         thought = AgentThought()
         full_reply_parts: list[str] = []
         all_tool_results: Dict[str, Any] = {}
+        tool_call_counts: Dict[str, int] = {}  # 追踪每个工具被调用的次数，防死循环
 
         # 构建流式 system prompt
-        stm_perception_text, energy_label, mood_label = await self._fetch_context_state()
+        stm_perception_text, energy_label, mood_label, computer_status = await self._fetch_context_state()
         system_prompt = build_streaming_prompt(
             identity=identity_loader.identity,
             is_private=message.is_private,
             stm_perception=stm_perception_text,
             energy_label=energy_label,
             mood_label=mood_label,
+            computer_status=computer_status,
         )
 
         # 构建 API tools
@@ -835,6 +891,9 @@ class AgentBrain:
             voice_task = asyncio.create_task(voice_player.play_streaming(voice_queue))
 
         try:
+            # 初始化有序并发 TTS 生命周期
+            message_manager.begin_tts_reply()
+
             for iteration in range(self.max_iterations):
                 thought.iteration = iteration + 1
                 logger.info(f"流式轮次 {iteration + 1}/{self.max_iterations}")
@@ -855,6 +914,10 @@ class AgentBrain:
                     if event_type == "content":
                         token = event["delta"]
                         collected_text += token
+                        # token 级推送到电脑前端（逐字显示）
+                        if message.source == "computer" and token:
+                            if token.strip() != "（沉默）":
+                                await message_manager.send_token(message, token)
                         sentences = detector.feed(token)
                         for sentence in sentences:
                             if sentence.strip() == "（沉默）":
@@ -891,15 +954,36 @@ class AgentBrain:
                 for call in tool_call_objs:
                     if call.tool_id in execution_results:
                         all_tool_results[call.tool_id] = execution_results[call.tool_id]
+                    tool_call_counts[call.tool_name] = tool_call_counts.get(call.tool_name, 0) + 1
 
                 # 将工具结果喂回消息，继续下一轮流式
                 assistant_content = collected_text or ""
                 tool_results_content = self._format_tool_results(execution_results)
+
+                # 构建反馈消息 — 检测重复工具调用，防死循环
+                max_repeat = max(tool_call_counts.values()) if tool_call_counts else 0
+                send_already_ok = any(
+                    isinstance(all_tool_results.get(tid), dict) and all_tool_results.get(tid, {}).get("success")
+                    for tid in all_tool_results
+                )
+
+                if max_repeat >= 2:
+                    repeated = [name for name, cnt in tool_call_counts.items() if cnt >= 2]
+                    feedback_msg = (
+                        f"工具执行结果:\n{tool_results_content}\n\n"
+                        f"⚠️ 你已经多次调用 {', '.join(repeated)}，获得了足够的信息。"
+                        f"不要再调用该工具，直接根据已有结果回复。如需其他工具可以继续调用。"
+                    )
+                elif send_already_ok:
+                    feedback_msg = (
+                        f"工具执行结果:\n{tool_results_content}\n\n"
+                        f"消息已成功发送，不要再次调用发送工具。直接回复即可。"
+                    )
+                else:
+                    feedback_msg = f"工具执行结果:\n{tool_results_content}\n\n请根据结果回复。如果不需要更多工具，直接回复即可。"
+
                 messages.append({"role": "assistant", "content": assistant_content})
-                messages.append({
-                    "role": "user",
-                    "content": f"工具执行结果:\n{tool_results_content}\n\n请根据结果继续回复。如果不需要更多工具，直接回复即可。",
-                })
+                messages.append({"role": "user", "content": feedback_msg})
 
             # 达到最大轮次
             if thought.status != ThoughtStatus.COMPLETE:
@@ -907,6 +991,8 @@ class AgentBrain:
                 thought.status = ThoughtStatus.COMPLETE
 
         finally:
+            # 等待所有 TTS 任务完成
+            await message_manager.end_tts_reply()
             # 结束语音管道
             if voice_queue is not None:
                 await voice_queue.put(None)

@@ -21,6 +21,48 @@ class NapCatClient:
         self._message_callback: Optional[Callable] = None
         self._connected = False
         self.self_id: Optional[int] = None
+        # 群名映射 {群名: group_id_str, group_id_str: 群名}
+        self._group_name_map: Dict[str, str] = {}
+        self._group_id_map: Dict[str, str] = {}
+
+    async def refresh_group_map(self):
+        """从 NapCat 拉取群列表，更新群名映射。"""
+        groups = await self.get_group_list()
+        if not groups:
+            return
+        self._group_name_map.clear()
+        self._group_id_map.clear()
+        for g in groups:
+            gid = str(g.get("group_id", ""))
+            name = g.get("group_name", "")
+            if gid and name:
+                self._group_name_map[name] = gid
+                self._group_id_map[gid] = name
+        logger.info(f"群名映射已更新: {len(self._group_name_map)} 个群")
+
+    def resolve_group_id(self, name_or_id: str) -> Optional[str]:
+        """群名或群号 → 群号。支持群名、群号、private_ 前缀。"""
+        if name_or_id.startswith("private_") or name_or_id.startswith("dm_"):
+            return name_or_id
+        if name_or_id in self._group_name_map:
+            return self._group_name_map[name_or_id]
+        # 可能本身就是群号
+        if name_or_id.isdigit():
+            return name_or_id
+        return None
+
+    def get_group_name(self, group_id: str) -> Optional[str]:
+        """群号 → 群名。"""
+        return self._group_id_map.get(group_id)
+
+    def get_group_list_text(self) -> str:
+        """返回群列表的简短文本，用于 AI prompt。"""
+        if not self._group_name_map:
+            return ""
+        lines = []
+        for name, gid in self._group_name_map.items():
+            lines.append(f"- {name}")
+        return "\n".join(lines)
 
     async def send_group_message(self, group_id: int, message: str) -> bool:
         """发送群消息"""
@@ -84,6 +126,45 @@ class NapCatClient:
         except Exception as e:
             logger.error(f"发送私聊消息异常: {e}")
             return False
+
+    async def get_msg(self, message_id: int) -> Optional[Dict]:
+        """通过消息ID获取原始消息内容（OneBot get_msg API）"""
+        if not self.http_url:
+            return None
+        try:
+            response = await self.client.post(
+                f"{self.http_url}/get_msg",
+                json={"message_id": message_id}
+            )
+            response.raise_for_status()
+            result = response.json()
+            if result.get("status") == "ok":
+                return result.get("data")
+            return None
+        except Exception as e:
+            logger.error(f"获取消息失败: {e}")
+            return None
+
+    def extract_reply_id(self, message: list | str) -> Optional[int]:
+        """提取回复消息的ID。支持 array 格式和 CQ 码字符串格式。"""
+        if isinstance(message, list):
+            for segment in message:
+                if isinstance(segment, dict) and segment.get("type") == "reply":
+                    msg_id = segment.get("data", {}).get("id")
+                    if msg_id:
+                        try:
+                            return int(msg_id)
+                        except (ValueError, TypeError):
+                            return None
+        elif isinstance(message, str):
+            import re
+            match = re.search(r'\[CQ:reply,id=(\d+)\]', message)
+            if match:
+                try:
+                    return int(match.group(1))
+                except ValueError:
+                    return None
+        return None
 
     async def get_group_info(self, group_id: int) -> Optional[Dict]:
         """获取群信息"""

@@ -29,11 +29,17 @@ def _get_valve_filter() -> ValveFilter:
 
 
 # 按句末标点和换行拆分，标点保留在前一条末尾
-_SPLIT_PUNCTS = re.compile(r'[。！？\n]+')
+# 拆分标点：，。！？\n
+_SPLIT_PUNCTS = re.compile(r'[，。！？\n]+')
+# 拆分后要去掉的标点（，。）
+_STRIP_PUNCTS = re.compile(r'[，。]+$')
+
+# 匹配 @[12345] 格式转换为 CQ @码
+_AT_PATTERN = re.compile(r'@\[(\d+)\]')
 
 
 def _split_message(text: str) -> List[str]:
-    """将长文本按句末标点拆成多条消息，标点保留在前条末尾。"""
+    """将长文本按标点拆成多条消息。，。拆分后去掉，！？保留。"""
     text = text.strip()
     if not text:
         return []
@@ -44,7 +50,10 @@ def _split_message(text: str) -> List[str]:
         end = m.end()
         seg = text[last:end].strip()
         if seg:
-            parts.append(seg)
+            # ，。结尾的去掉标点
+            seg = _STRIP_PUNCTS.sub('', seg)
+            if seg:
+                parts.append(seg)
         last = end
 
     # 剩余部分
@@ -53,6 +62,11 @@ def _split_message(text: str) -> List[str]:
         parts.append(tail)
 
     return parts if parts else [text]
+
+
+def _convert_at_codes(text: str) -> str:
+    """将 AI 输出的 @[QQ号] 格式转换为 QQ CQ码 [CQ:at,qq=QQ号]。"""
+    return _AT_PATTERN.sub(r'[CQ:at,qq=\1]', text)
 
 
 class SendMessageTool(Tool):
@@ -69,7 +83,10 @@ class SendMessageTool(Tool):
 
     @property
     def description(self) -> str:
-        return "发送消息到群聊或私聊。直接写完整回复即可，系统会自动拆成小句发送。支持QQ和Discord。"
+        return ("发送消息到群聊或私聊。直接写完整回复即可，系统会自动拆成小句发送。支持QQ和Discord。"
+                "你可以发到任何QQ群，只要把群号作为 group_id 传入即可（如 group_id: \"123456789\"）。"
+                "也可以发私聊消息，group_id 格式为 \"private_QQ号\"。"
+                "群聊中如需@某人，传入 at 参数（QQ号数组），对方会收到提醒。")
 
     @property
     def arguments(self) -> list:
@@ -85,6 +102,12 @@ class SendMessageTool(Tool):
                 type="string",
                 description="要发送的消息内容（完整文本，无需手动拆分）",
                 required=True
+            ),
+            ToolArgument(
+                name="at",
+                type="array",
+                description="要@的QQ号列表，如 [\"12345\"] 或 [\"12345\",\"67890\"]。不需要@时不要填",
+                required=False
             )
         ]
 
@@ -114,11 +137,18 @@ class SendMessageTool(Tool):
     async def execute(self, **kwargs) -> Dict:
         group_id = kwargs.get("group_id")
         content = kwargs.get("content")
+        at_list = kwargs.get("at") or []
 
         if not group_id or not content:
             return {"success": False, "error": "缺少必要参数"}
 
         is_private = group_id.startswith("private_")
+        is_computer = group_id == "computer_home"
+
+        # 构建 @ 前缀（QQ 群聊才生效）
+        at_prefix = ""
+        if at_list and not is_computer and not is_private:
+            at_prefix = "".join(f"[CQ:at,qq={qq}] " for qq in at_list)
 
         # 阀门过滤
         filter_result = _get_valve_filter().check(content)
@@ -126,12 +156,16 @@ class SendMessageTool(Tool):
             logger.warning(f"消息被阀门拦截: {filter_result.reason}")
             return {"success": False, "error": f"消息被过滤: {filter_result.reason}"}
 
-        # 自动拆分
+        # 自动拆分，并在第一条消息前加上 @ 前缀
         chunks = _split_message(content)
+        # QQ 群聊路由下将 @[QQ号] 转为 CQ @码
+        if not is_computer and not is_private:
+            chunks = [_convert_at_codes(c) for c in chunks]
+            if at_prefix and chunks:
+                chunks[0] = at_prefix + chunks[0]
         sent_chunks: list[str] = []
 
         # 本地电脑路由
-        is_computer = group_id == "computer_home"
         if is_computer:
             try:
                 from backend.routes.computer_routes import send_to_computer

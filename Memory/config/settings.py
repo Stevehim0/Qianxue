@@ -62,7 +62,9 @@ class DecayConfig:
 class ScheduleConfig:
     """作息时间配置。"""
 
-    enabled: bool = True  # 是否启用巩固和休眠调度
+    enabled: bool = field(
+        default_factory=lambda: os.getenv("SCHEDULE_ENABLED", "true").lower() == "true"
+    )  # 是否启用巩固和休眠调度
     sleep_time: str = "03:00"  # 入睡时间
     wake_time: str = "09:00"  # 起床时间
     timezone: str = "Asia/Shanghai"  # 时区

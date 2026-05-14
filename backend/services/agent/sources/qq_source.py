@@ -67,6 +67,24 @@ class QQSource:
             # 检测图片
             image_url = napcat_client.extract_image_url(message_content)
 
+            # 检测回复引用
+            reply_content = None
+            reply_sender = None
+            reply_sender_id = None
+            reply_id = napcat_client.extract_reply_id(message_content)
+            if reply_id:
+                try:
+                    original_msg = await napcat_client.get_msg(reply_id)
+                    if original_msg:
+                        reply_sender = napcat_client.extract_user_nickname(original_msg.get("sender", {}))
+                        reply_sender_id = str(original_msg.get("sender", {}).get("user_id", ""))
+                        reply_raw = original_msg.get("message", original_msg.get("raw_message", ""))
+                        reply_content = napcat_client.extract_plain_text(reply_raw)
+                        if reply_content:
+                            logger.info(f"检测到回复引用: {reply_sender}: {reply_content[:50]}")
+                except Exception as e:
+                    logger.error(f"获取回复原始消息失败: {e}")
+
             # 提取纯文本内容
             text_content = napcat_client.extract_plain_text(message_content)
 
@@ -111,6 +129,9 @@ class QQSource:
                 image_url=image_url,
                 image_type=image_type,
                 image_description=image_description,
+                reply_content=reply_content,
+                reply_sender=reply_sender,
+                reply_sender_id=reply_sender_id,
                 priority=10 if is_mentioned else 0,
                 is_private=is_private,
                 timestamp=datetime.now()

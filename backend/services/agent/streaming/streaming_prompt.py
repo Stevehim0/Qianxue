@@ -12,7 +12,7 @@ import logging
 from typing import Optional
 
 from backend.services.core.models import Identity
-from backend.services.core.prompt_builder import _build_identity_section
+from backend.services.core.prompt_builder import _build_identity_section, _build_computer_perception
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +23,19 @@ def build_streaming_prompt(
     stm_perception: str = "",
     energy_label: str = "充沛",
     mood_label: str = "平静",
+    computer_status: dict = None,
 ) -> str:
     """构建流式路径的系统 prompt。
 
     比完整 prompt 更轻量：不包含 JSON 格式要求和工具描述（工具通过 API tools 参数传入）。
     """
     parts = []
+
+    # 0. 可用群列表
+    from backend.api.napcat import napcat_client
+    group_list_text = napcat_client.get_group_list_text()
+    if group_list_text:
+        parts.append("# 你加入的群\n" + group_list_text)
 
     # 1. 身份层（复用 prompt_builder 的函数）
     parts.append(_build_identity_section(identity))
@@ -41,6 +48,10 @@ def build_streaming_prompt(
         state_parts.append(f"情绪：{mood_label}")
     if state_parts:
         parts.append("# 当前状态\n" + "\n".join(state_parts))
+
+    # 2.5 环境感知（电脑前端在线状态）
+    if computer_status is not None:
+        parts.append(_build_computer_perception(computer_status))
 
     # 3. 短期记忆感知
     if stm_perception:
@@ -121,6 +132,16 @@ def _build_streaming_guidance() -> str:
 - 不要直接念搜索结果，不要说"根据我的记忆"
 - 如果搜索结果为空，坦诚说记不得了，不能编造回忆
 
+## forward_message — 转发消息到其他群或私聊
+
+当前群的回复你直接输出文字就行，系统会自动发送。
+但如果你需要发到其他群、或者发私聊消息，调用 forward_message 工具。
+- 用群名作为 target（如 "我的小窝"），系统会自动解析成群号
+- 私聊用 "private_QQ号" 作为 target
+- 如需@某人，传入 at 参数，如 at: ["12345"]
+- 如果发送失败，系统会返回错误，你告诉对方就行
+- 不要用群号，用群名更准确
+
 ## 对话注意
 
 - 你是在群里参与聊天，不是在做客服。不是每条消息都需要你接话的
@@ -132,10 +153,10 @@ def _build_streaming_guidance() -> str:
 def build_api_tools(tool_registry) -> list:
     """将 Tool 注册表转为 OpenAI function calling 格式。
 
-    排除流式路径不需要的工具（send_message、send_voice），
-    因为发送已由 MessageManager 统一处理。
+    send_message / send_voice 排除（发送由 MessageManager 统一处理）。
+    forward_message 额外注入，用于发到其他群或私聊。
     """
-    EXCLUDED_TOOLS = {"send_message"}
+    EXCLUDED_TOOLS = {"send_message", "send_voice"}
     tools = []
 
     for name in tool_registry.list_tools():
@@ -170,6 +191,33 @@ def build_api_tools(tool_registry) -> list:
                 "parameters": parameters,
             }
         })
+
+    # 注入 forward_message：流式路径专用的"发到其他群"工具
+    tools.append({
+        "type": "function",
+        "function": {
+            "name": "forward_message",
+            "description": "发消息到其他群或私聊。当前群的回复直接输出文字即可（系统自动发送），这个工具仅用于发到当前群以外的地方。用群名指定目标群。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "目标群名（如\"我的小窝\"）或私聊格式\"private_QQ号\"。优先用群名，不要用群号。",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "要发送的消息内容",
+                    },
+                    "at": {
+                        "type": "array",
+                        "description": "要@的QQ号列表，如 [\"12345\"]。不需要@时不填",
+                    },
+                },
+                "required": ["target", "content"],
+            },
+        }
+    })
 
     return tools
 

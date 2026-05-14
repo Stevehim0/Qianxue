@@ -20,6 +20,7 @@ def build_system_prompt(
     stm_perception: str = "",
     energy_label: str = "充沛",
     mood_label: str = "平静",
+    computer_status: dict = None,
 ) -> str:
     """构建完整的 system prompt。
 
@@ -59,6 +60,10 @@ def build_system_prompt(
     if state_parts:
         parts.append("# 当前状态\n" + "\n".join(state_parts))
 
+    # 2.5 环境感知（电脑前端在线状态）
+    if computer_status is not None:
+        parts.append(_build_computer_perception(computer_status))
+
     # 3. 短期记忆感知（跨会话全局感知）
     if stm_perception:
         parts.append(stm_perception)
@@ -81,6 +86,19 @@ def build_system_prompt(
         parts.append(_build_format_section())
 
     return "\n\n".join(parts)
+
+
+def _build_computer_perception(status: dict) -> str:
+    """构建电脑前端在线感知文本。"""
+    if status.get("online"):
+        duration = status.get("duration", "")
+        since = status.get("connected_since", "")
+        desc = f"你的电脑前端界面正在运行中（{since}起在线"
+        if duration:
+            desc += f"，已在线 {duration}"
+        desc += "）。你随时可以通过这个界面和主人交流。"
+        return f"# 环境感知\n{desc}"
+    return "# 环境感知\n你的电脑前端界面当前没有打开。如果需要找主人，可以通过 QQ 发消息给主人（QQ号 2950056105）让主人上线。"
 
 
 def _build_private_context_section() -> str:
@@ -184,6 +202,16 @@ def _build_tools_section(tools_description: str) -> str:
 - link_identity：当你发现不同平台上的人其实是同一个人时使用。比如有人说"我的QQ号是xxx"，或者你发现某个人的说话风格和你在别处认识的人很像。你可以主动问"你是不是xxx？"确认后记录关联
 - 不需要每次都用 get_current_time
 
+## @ 某人
+
+群聊中可以 @ 某人让对方收到提醒。方法是在 send_message 调用时传入 at 参数（QQ号列表）。
+
+你从消息头中看到的 用户ID、(QQ:xxx) 就是QQ号。
+- 例如你想 @ QQ号为12345的人：传参数 at: ["12345"]
+- @ 多人：at: ["12345", "67890"]
+- 不需要 @ 时不要填 at 参数
+- 私聊和电脑聊天不需要 @
+
 ## 对话注意事项
 
 - 回复通常 2-3 句话即可，简洁自然；对方问详细问题时可以适当多说
@@ -225,6 +253,19 @@ def _build_format_section() -> str:
   "done": true
 }
 
+群聊中需要@某人时：
+{
+  "thought_content": "想叫某人来聊聊",
+  "tool_calls": [
+    {
+      "id": "1",
+      "tool_name": "send_message",
+      "arguments": {"group_id": "群号", "content": "你来啦，一起聊~", "at": ["12345"]}
+    }
+  ],
+  "done": true
+}
+
 ## 关于 interim_message
 
 当你需要先调用工具（search_memory、recognize_image 等）才能回复时，必须填写 interim_message。
@@ -261,6 +302,10 @@ def _build_proactive_tools_section(tools_description: str) -> str:
 - 如果没什么感觉，也不需要强行找话说
 - 可以用 search_memory 回忆某些事（你觉得有意思的话题）
 
+如果电脑前端在线，你也可以主动跟主人说话——比如打个招呼、分享你在想什么。
+- 使用 group_id = "computer_home" 发送到电脑前端
+- 像朋友一样自然就好，不需要每次心跳都说话
+
 不需要刻意沉默，也不需要刻意开口。像你自己一样自然就好。"""
 
 
@@ -283,6 +328,19 @@ def _build_proactive_format_section() -> str:
       "id": "1",
       "tool_name": "send_message",
       "arguments": {"group_id": "群号", "content": "你想说的话"}
+    }
+  ],
+  "done": true
+}
+
+想对电脑前端的主人说话（如果环境感知显示电脑前端在线）：
+{
+  "thought_content": "主人在线，想跟ta说点什么",
+  "tool_calls": [
+    {
+      "id": "1",
+      "tool_name": "send_message",
+      "arguments": {"group_id": "computer_home", "content": "你想说的话"}
     }
   ],
   "done": true

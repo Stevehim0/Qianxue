@@ -8,9 +8,16 @@ const voiceIcon = document.getElementById('voice-icon');
 
 let ws = null;
 let currentBotMsg = null;
-let audioQueue = [];
-let isPlayingAudio = false;
 let voiceEnabled = false;
+
+// --- 流式音频播放（抖动缓冲 + 逐 chunk 调度） ---
+let audioCtx = null;
+const SAMPLE_RATE = 24000;
+const PLAY_BUFFER_MIN = 2;     // 攒够 N 个 chunk 再开始播放（chunk≈50ms, 2×50ms=100ms 抖动缓冲）
+let seqBuffers = {};            // seq -> { chunks:[], done:bool, scheduled:int, started:bool }
+let nextPlaySeq = 0;
+let sNextTime = 0;
+let activeSources = [];        // 正在播放的 AudioBufferSourceNode，用于跨回复停掉旧音频
 
 // --- WebSocket ---
 
@@ -55,11 +62,27 @@ function startPing() {
 
 function handleServerMessage(msg) {
     switch (msg.type) {
-        case 'sentence':
-            appendBotSentence(msg.text);
+        case 'token':
+            appendBotToken(msg.text);
+            break;
+        case 'audio_begin':
+            if (msg.seq === 0) {
+                stopAllAudio();
+                seqBuffers = {};
+                nextPlaySeq = 0;
+                sNextTime = 0;
+            }
+            seqBuffers[msg.seq] = { chunks: [], done: false, scheduled: 0, started: false };
+            break;
+        case 'audio_chunk':
+            handleAudioChunk(msg.seq, msg.idx, msg.data);
+            break;
+        case 'audio_end':
+            handleAudioEnd(msg.seq);
             break;
         case 'audio':
-            queueAudio(msg.data);
+            // 兼容：完整音频（EdgeTTS fallback）
+            handleLegacyAudio(msg.data);
             break;
         case 'done':
             finishBotMessage();
@@ -72,6 +95,8 @@ function handleServerMessage(msg) {
     }
 }
 
+// --- 消息显示 ---
+
 function appendUserMessage(text) {
     const div = document.createElement('div');
     div.className = 'message user';
@@ -80,7 +105,7 @@ function appendUserMessage(text) {
     scrollToBottom();
 }
 
-function appendBotSentence(text) {
+function appendBotToken(token) {
     if (!currentBotMsg) {
         currentBotMsg = document.createElement('div');
         currentBotMsg.className = 'message bot';
@@ -88,15 +113,13 @@ function appendBotSentence(text) {
         chatContainer.appendChild(currentBotMsg);
     }
 
-    currentBotMsg.dataset.content += text;
-    // 渲染：文本 + 闪烁光标
+    currentBotMsg.dataset.content += token;
     currentBotMsg.innerHTML = escapeHtml(currentBotMsg.dataset.content) + '<span class="typing-cursor"></span>';
     scrollToBottom();
 }
 
 function finishBotMessage() {
     if (currentBotMsg) {
-        // 移除光标，显示最终文本
         currentBotMsg.innerHTML = escapeHtml(currentBotMsg.dataset.content);
         currentBotMsg = null;
     }
@@ -113,38 +136,132 @@ function appendSystemMessage(text) {
     scrollToBottom();
 }
 
-// --- 音频播放 ---
+// --- 流式音频播放（抖动缓冲 + 逐 chunk 调度） ---
 
-function queueAudio(base64Mp3) {
-    if (!voiceEnabled) return;
-    audioQueue.push(base64Mp3);
-    if (!isPlayingAudio) {
-        playNextAudio();
+function ensureAudioCtx() {
+    if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+        seqBuffers = {};
+        nextPlaySeq = 0;
+        sNextTime = 0;
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
 }
 
-function playNextAudio() {
-    if (audioQueue.length === 0) {
-        isPlayingAudio = false;
-        return;
+function pcmBase64ToFloat32(base64Data) {
+    const binary = atob(base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const numSamples = bytes.length / 2;
+    if (numSamples === 0) return null;
+    const samples = new Float32Array(numSamples);
+    const view = new DataView(bytes.buffer);
+    for (let i = 0; i < numSamples; i++) {
+        samples[i] = view.getInt16(i * 2, true) / 32768.0;
     }
-    isPlayingAudio = true;
-    const b64 = audioQueue.shift();
-    const bytes = atob(b64);
+    return samples;
+}
+
+function playChunk(samples) {
+    const buf = audioCtx.createBuffer(1, samples.length, SAMPLE_RATE);
+    buf.getChannelData(0).set(samples);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    const t = Math.max(audioCtx.currentTime, sNextTime);
+    src.start(t);
+    sNextTime = t + buf.duration;
+    activeSources.push(src);
+    src.onended = () => {
+        const i = activeSources.indexOf(src);
+        if (i >= 0) activeSources.splice(i, 1);
+    };
+}
+
+function stopAllAudio() {
+    for (const src of activeSources) {
+        try { src.stop(); } catch (_) {}
+    }
+    activeSources = [];
+}
+
+function scheduleUnplayed(seq) {
+    const entry = seqBuffers[seq];
+    if (!entry) return;
+    while (entry.scheduled < entry.chunks.length) {
+        playChunk(entry.chunks[entry.scheduled]);
+        entry.scheduled++;
+    }
+}
+
+function handleAudioChunk(seq, idx, base64Data) {
+    if (!voiceEnabled) return;
+    ensureAudioCtx();
+    const samples = pcmBase64ToFloat32(base64Data);
+    if (!samples) return;
+    if (!seqBuffers[seq]) seqBuffers[seq] = { chunks: [], done: false, scheduled: 0, started: false };
+    seqBuffers[seq].chunks.push(samples);
+
+    if (seq === nextPlaySeq) {
+        const entry = seqBuffers[seq];
+        if (!entry.started) {
+            // 攒够缓冲再开始
+            if (entry.chunks.length >= PLAY_BUFFER_MIN) {
+                entry.started = true;
+                scheduleUnplayed(seq);
+            }
+        } else {
+            // 已在播放，新 chunk 直接调度
+            playChunk(samples);
+            entry.scheduled++;
+        }
+    }
+}
+
+function handleAudioEnd(seq) {
+    if (seqBuffers[seq]) seqBuffers[seq].done = true;
+    // 短句可能凑不够缓冲就结束了，直接播放
+    if (seq === nextPlaySeq && seqBuffers[seq] && !seqBuffers[seq].started) {
+        seqBuffers[seq].started = true;
+        scheduleUnplayed(seq);
+    }
+    advancePlayback();
+}
+
+function advancePlayback() {
+    while (seqBuffers[nextPlaySeq]) {
+        const entry = seqBuffers[nextPlaySeq];
+        // 还没开始：检查缓冲是否足够
+        if (!entry.started) {
+            if (entry.chunks.length >= PLAY_BUFFER_MIN || entry.done) {
+                entry.started = true;
+            } else {
+                break;
+            }
+        }
+        scheduleUnplayed(nextPlaySeq);
+        if (entry.done) {
+            delete seqBuffers[nextPlaySeq];
+            nextPlaySeq++;
+        } else {
+            break;
+        }
+    }
+}
+
+function handleLegacyAudio(base64Data) {
+    if (!voiceEnabled) return;
+    const bytes = atob(base64Data);
     const buf = new Uint8Array(bytes.length);
     for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
-    const blob = new Blob([buf], { type: 'audio/mp3' });
+    const blob = new Blob([buf], { type: 'audio/wav' });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.onended = () => {
-        URL.revokeObjectURL(url);
-        playNextAudio();
-    };
-    audio.onerror = () => {
-        URL.revokeObjectURL(url);
-        playNextAudio();
-    };
-    audio.play().catch(() => playNextAudio());
+    audio.onended = () => URL.revokeObjectURL(url);
+    audio.onerror = () => URL.revokeObjectURL(url);
+    audio.play().catch(() => {});
 }
 
 // --- 发送 ---
@@ -192,10 +309,16 @@ inputArea.addEventListener('input', () => {
 voiceToggle.addEventListener('change', () => {
     voiceEnabled = voiceToggle.checked;
     voiceIcon.textContent = voiceEnabled ? '🔊' : '🔇';
-    if (!voiceEnabled) {
-        // 关闭时清空队列，停止播放
-        audioQueue = [];
-        isPlayingAudio = false;
+    if (!voiceEnabled && audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+        seqBuffers = {};
+        nextPlaySeq = 0;
+        sNextTime = 0;
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'set_voice', enabled: voiceEnabled }));
     }
 });
 

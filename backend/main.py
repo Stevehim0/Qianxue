@@ -399,8 +399,9 @@ async def onebot_websocket(websocket: WebSocket):
 
                 if message_type == "group":
                     self_id = message.get("self_id")
-                    if self_id:
+                    if self_id and napcat_client.self_id != self_id:
                         napcat_client.self_id = self_id
+                        asyncio.create_task(napcat_client.refresh_group_map())
 
                     await _process_group_message(message)
 

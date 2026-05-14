@@ -9,7 +9,13 @@ if defined QIANXUE_PYTHON (
     goto :found
 )
 
-REM 1. conda envs (preferred - has project deps)
+REM 1. SpaceX env (preferred - has all project deps)
+if exist "D:\Miniconda\envs\SpaceX\python.exe" (
+    set "PY=D:\Miniconda\envs\SpaceX\python.exe"
+    goto :found
+)
+
+REM 2. other conda envs
 for /d %%e in (
     "%USERPROFILE%\miniconda3\envs\*"
     "%USERPROFILE%\Miniconda3\envs\*"
