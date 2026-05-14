@@ -117,18 +117,60 @@
 ## 前置要求
 
 - Python 3.10+
-- Windows 版 QQ (NTQQ)
-- [NapCat](https://napneko.github.io/guide/napcat)（QQ OneBot 协议框架）
 - 至少一个 OpenAI 兼容 LLM API
+- [FFmpeg](https://ffmpeg.org/download.html)（音频处理，需加入 PATH 或放入 `vendor/` 目录）
 
 ## 安装
 
-克隆项目
 ```bash
+git clone https://github.com/your-repo/qianxue.git
 cd qianxue
-
 pip install -r requirements.txt
 ```
+
+## 外部依赖
+
+千雪的部分功能依赖外部服务，按需安装即可。
+
+### NapCat — QQ 消息通道（可选）
+
+如果你需要千雪接入 QQ 群聊：
+
+1. 安装 NTQQ：https://im.qq.com/pcqq
+2. 安装 NapCat：https://napneko.github.io/guide/napcat
+3. 配置反向 WebSocket 地址：`ws://localhost:8000/ws/onebot`
+4. 配置 HTTP 服务地址：`http://localhost:3000`
+
+不配置 NapCat 则 QQ 通道不可用，但仍可使用 Discord 和电脑前端。
+
+### Discord Bot — Discord 消息通道（可选）
+
+1. 前往 [Discord Developer Portal](https://discord.com/developers/applications) 创建应用
+2. 创建 Bot，获取 Token
+3. 开启 MESSAGE CONTENT INTENT 和 PRESENCE INTENT
+4. 通过 Web 管理界面 (`http://localhost:5002`) → 配置 → Discord，填入 Token
+
+不配置 Discord Token 则 Discord 通道不可用，但仍可使用 QQ 和电脑前端。
+
+### FunASR — 语音识别（语音功能需要）
+
+语音转文字依赖 [FunASR](https://github.com/modelscope/FunASR)，推荐 Docker 部署：
+
+```bash
+docker run -p 10095:10095 -p 10096:10096 registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.12
+```
+
+启动后 WebSocket 地址为 `ws://localhost:10095`。不部署则无法识别语音消息。
+
+### Qwen3-TTS — 高质量语音合成（可选，默认使用 Edge TTS）
+
+默认使用 Edge TTS（免费、无需部署）。如需更高音质，可部署 Qwen3-TTS 本地服务：
+
+1. 克隆并启动 [Qwen3-TTS-Openai-Fastapi](https://github.com/cofecms/Qwen3-TTS-Openai-Fastapi)
+2. 默认监听 `http://localhost:8880`
+3. 在 `backend/config/voice.yaml` 中设置 `tts.backend: "qwen3"`
+
+不部署则使用 Edge TTS，功能完全可用，音质略低。
 
 ## 配置
 
@@ -137,13 +179,6 @@ pip install -r requirements.txt
 1. 安装依赖 → 启动服务 → 打开 `http://localhost:5002`
 2. 点击"配置"，选择提供商预设，填入 API Key，保存
 3. 其余参数（大脑、睡眠、记忆、视觉等）按分组配置，改了立即生效
-
-### NapCat 配置
-
-1. 安装 NTQQ：https://im.qq.com/pcqq
-2. 安装 NapCat：https://napneko.github.io/guide/napcat
-3. 配置反向 WebSocket 地址：`ws://localhost:8000/ws/onebot`
-4. 配置 HTTP 服务地址：`http://localhost:3000`
 
 ## 启动
 
@@ -318,6 +353,8 @@ qianxue/
 ├── heartbeat/                  # 心跳服务（触发主动思考）
 │   ├── loop.py                 # 心跳主循环
 │   └── config.py               # 心跳配置加载
+├── tools/                      # 独立工具
+│   └── screen_capture_agent.py # 屏幕感知客户端
 ├── start_all.py / .bat         # 一键启动
 └── heartbeat_config.yaml       # 心跳配置（enabled / interval / backend_url）
 ```

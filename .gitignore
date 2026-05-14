@@ -72,5 +72,7 @@ Qwen3-TTS-Openai-Fastapi/
 *.wav
 tts_server.py
 
-#开发文档
+# Dev logs & discussion docs
+dev-log.md
+docs/plan-*.md
 问题.md
