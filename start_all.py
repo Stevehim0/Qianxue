@@ -22,7 +22,7 @@ PYTHON = os.environ.get("QIANXUE_PYTHON", "D:/Miniconda/envs/SpaceX/python.exe")
 SERVICES = [
     # SenseVoice STT — 离线转写，~50ms/句，全双工语音识别
     {"name": "SenseVoice STT", "tag": "STT", "color": "95", "delay": 0,
-     "cmd": [PYTHON, "sensevoice_server.py"]},
+     "cmd": [PYTHON, "servers/sensevoice_server.py"]},
 
     # FasterQwenTTS — CUDA Graphs 加速, RTF ~2.2x, 流式 PCM
     {"name": "FasterQwenTTS", "tag": "TTS", "color": "35", "delay": 0,
@@ -32,7 +32,7 @@ SERVICES = [
          "conda activate tts && "
          "cd /mnt/d/Code/Qianxue-master-git && "
          "HF_ENDPOINT=https://hf-mirror.com "
-         "python tts_server.py --host 0.0.0.0 --port 8880"
+         "python servers/tts_server.py --host 0.0.0.0 --port 8880"
      )},
 
     {"name": "Memory API",  "tag": "MEM",  "color": "36", "delay": 0,

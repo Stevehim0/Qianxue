@@ -13,6 +13,7 @@ Response: {"text": "你好"}
 
 import logging
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -20,7 +21,14 @@ from fastapi.responses import JSONResponse
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("sensevoice-server")
 
-app = FastAPI(title="SenseVoice STT")
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    get_model()
+    yield
+
+
+app = FastAPI(title="SenseVoice STT", lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
 # 模型加载
@@ -93,12 +101,6 @@ async def health():
     return JSONResponse({"status": "ok"})
 
 
-@app.on_event("startup")
-async def startup():
-    """预加载模型。"""
-    get_model()
-
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("sensevoice_server:app", host="0.0.0.0", port=10096, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=10096, log_level="info")

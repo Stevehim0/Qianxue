@@ -87,19 +87,25 @@ async def startup():
     )
     _SAMPLE_RATE = _model.sample_rate
 
-    # 提取 speaker embedding（一次性，~10 秒）
-    logger.info("Extracting speaker embedding...")
-    _ref_text_path = os.path.join(os.path.dirname(__file__), "ref_txt.txt")
-    with open(_ref_text_path, encoding="utf-8") as f:
-        ref_text = f.read().strip()
+    # 加载或提取 voice clone prompt
+    _cache_path = os.path.join(os.path.dirname(__file__), "voice_prompt.pt")
+    if os.path.exists(_cache_path):
+        logger.info(f"Loading cached voice prompt from {_cache_path}...")
+        _voice_prompt = torch.load(_cache_path, weights_only=False)
+        logger.info("Voice prompt loaded from cache.")
+    else:
+        logger.info("No cached voice prompt found, extracting from reference audio...")
+        _ref_text_path = os.path.join(os.path.dirname(__file__), "ref_txt.txt")
+        with open(_ref_text_path, encoding="utf-8") as f:
+            ref_text = f.read().strip()
 
-    logger.info("Extracting voice clone prompt (ICL mode)...")
-    _voice_prompt = _model.model.create_voice_clone_prompt(
-        ref_audio=_REF_AUDIO,
-        ref_text=ref_text,
-        x_vector_only_mode=False,
-    )
-    logger.info("Speaker embedding extracted.")
+        _voice_prompt = _model.model.create_voice_clone_prompt(
+            ref_audio=_REF_AUDIO,
+            ref_text=ref_text,
+            x_vector_only_mode=False,
+        )
+        torch.save(_voice_prompt, _cache_path)
+        logger.info(f"Voice prompt cached to {_cache_path}")
 
     # Warmup
     logger.info("Warmup...")
