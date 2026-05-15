@@ -69,7 +69,7 @@ vendor/
 
 # Test/debug outputs
 *.wav
-tts_server.py
+
 
 # Dev logs & discussion docs
 dev-log.md
