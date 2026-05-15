@@ -129,9 +129,27 @@ python -m heartbeat                               # 终端 3: 心跳服务
 
 ---
 
+## 功能矩阵
+
+千雪的核心功能开箱即用，语音和消息通道是可选增强。下表帮你决定装什么。
+
+| 功能 | 需要安装 | 硬件要求 | 不装会怎样 |
+|------|---------|---------|-----------|
+| 文字聊天（电脑前端） | 无 | 无 | —（核心功能） |
+| 记忆系统 | 无 | 无 | —（核心功能） |
+| 主动思考 / 心跳 | 无 | 无 | —（核心功能） |
+| QQ 消息 | NapCat | 无 | 没有 QQ 通道 |
+| Discord 消息 | Discord Bot | 无 | 没有 Discord 通道 |
+| 语音识别（STT） | SenseVoice 服务 | **推荐 GPU**（CPU 也能跑，慢约 5x） | 无法识别语音消息 |
+| 语音合成（TTS） | Edge TTS（免费）或 Qwen3-TTS（本地） | Edge: 无 / Qwen3: **必须 GPU** | 无法发送语音、无法接入 Discord 语音频道 |
+| 屏幕感知 | ScreenCaptureAgent | 无 | 千雪看不到你的屏幕 |
+| Discord 语音频道 | STT + TTS + Discord Bot | **GPU 推荐** | 无法在语音频道实时对话 |
+
+---
+
 ## 外部依赖
 
-千雪的部分功能依赖外部服务，**全部可选**，不装也能跑。
+以下服务**全部可选**。`pip install -r requirements.txt` + 一个 LLM API Key 就能让千雪跑起来。
 
 ### NapCat — QQ 消息通道
 
@@ -146,17 +164,113 @@ python -m heartbeat                               # 终端 3: 心跳服务
 2. 开启 MESSAGE CONTENT INTENT 和 PRESENCE INTENT
 3. Web 界面 → 配置 → Discord，填入 Token
 
-### FunASR — 语音识别
+### 语音识别 — SenseVoice（推荐）
+
+千雪自带 SenseVoice STT 服务（`servers/sensevoice_server.py`），基于 FunASR 离线模型，转写延迟 ~50ms/句。
+
+**安装：**
+
+```bash
+pip install funasr torch torchaudio fastapi uvicorn
+```
+
+**启动：**
+
+```bash
+python servers/sensevoice_server.py          # 默认端口 10096
+```
+
+**配置：** `backend/config/voice.yaml` 中确认：
+
+```yaml
+stt:
+  backend: "sensevoice"
+  sensevoice_url: "ws://localhost:10096"
+```
+
+> **硬件提示：** 模型约 900MB。GPU 推理 ~50ms/句，CPU 推理 ~250ms/句。没有 GPU 也能用。
+
+#### 备选：FunASR Docker（2pass 流式识别）
 
 ```bash
 docker run -p 10095:10095 -p 10096:10096 registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.12
 ```
 
-### Qwen3-TTS — 高质量语音合成（可选，默认使用 Edge TTS）
+对应配置 `stt.backend: "funasr"`。
 
-1. 克隆并启动 [Qwen3-TTS-Openai-Fastapi](https://github.com/cofecms/Qwen3-TTS-Openai-Fastapi)
-2. 默认监听 `http://localhost:8880`
-3. 在 `backend/config/voice.yaml` 中设置 `tts.backend: "qwen3"`
+### 语音合成
+
+千雪支持两种 TTS 引擎，默认使用免费的 Edge TTS，无需额外安装。
+
+#### Edge TTS（默认，免费，零配置）
+
+无需任何安装。`voice.yaml` 中确认：
+
+```yaml
+tts:
+  backend: "edge"
+  default_voice: "zh-CN-XiaoxiaoNeural"
+```
+
+#### Qwen3-TTS（本地高质量，需 GPU）
+
+千雪自带 Qwen3-TTS 服务（`servers/tts_server.py`），基于 `faster-qwen3-tts` 库，支持 CUDA Graphs 加速和声音克隆。
+
+**前置要求：** NVIDIA GPU（建议 ≥ 8GB VRAM），CUDA 12.x
+
+**安装：**
+
+```bash
+pip install faster-qwen3-tts torch fastapi uvicorn numpy
+```
+
+**准备参考音频（声音克隆）：**
+
+TTS 服务使用 ICL 声音克隆模式。首次启动需要提供参考音频和对应文本：
+
+1. 将参考音频放到 `servers/ref_voice_clean.wav`（WAV，任意采样率，建议 5-15 秒）
+2. 创建 `servers/ref_txt.txt`，写入参考音频的准确转写文本（一行）
+
+> 首次启动会从参考音频提取 voice prompt 并缓存为 `servers/voice_prompt.pt`（约 36KB），后续启动直接加载缓存，跳过提取。
+
+**启动：**
+
+```bash
+# 直接启动
+python servers/tts_server.py --host 0.0.0.0 --port 8880
+
+# 或使用 HuggingFace 镜像（国内加速下载模型）
+HF_ENDPOINT=https://hf-mirror.com python servers/tts_server.py --host 0.0.0.0 --port 8880
+
+# 或指定本地模型路径（跳过下载）
+python servers/tts_server.py --host 0.0.0.0 --port 8880  # 代码会自动检测 /mnt/e/models/Qwen3-TTS-12Hz-0.6B-Base
+```
+
+**配置：** `backend/config/voice.yaml` 中确认：
+
+```yaml
+tts:
+  backend: "qwen3"
+
+qwen3:
+  api_url: "http://localhost:8880"
+  voice: "Serena"
+```
+
+> **性能参考（RTX 4060）：** RTF ~2.2x（生成速度是实时的 2.2 倍），流式首块延迟 ~400ms。
+> 模型大小约 1.2GB。
+
+### 屏幕感知 — ScreenCaptureAgent
+
+让千雪能看到你的屏幕内容。
+
+```bash
+pip install mss pillow httpx keyboard
+python tools/screen_capture_agent.py
+```
+
+- **手动模式：** 按 `Ctrl+Shift+S` 截图发送给千雪
+- **自动模式：** 定时截图（需在代码中配置间隔）
 
 ---
 
