@@ -581,7 +581,9 @@ def _combine_messages(messages: list):
         is_heartbeat=last.is_heartbeat,
         is_private=last.is_private,
         has_image=any(msg.has_image for msg in messages),
-        image_description=next((msg.image_description for msg in messages if msg.image_description), ""),
+        image_url=next((msg.image_url for msg in messages if msg.image_url), None),
+        image_type=next((msg.image_type for msg in messages if msg.has_image), "无图片"),
+        image_description=next((msg.image_description for msg in messages if msg.image_description), None),
     )
 
 

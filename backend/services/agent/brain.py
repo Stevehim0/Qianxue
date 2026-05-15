@@ -85,8 +85,8 @@ class AgentBrain:
         """
         logger.info(f"AgentBrain开始处理消息: group={message.group_id}, user={message.user_id}")
 
-        # 心跳/图片消息走原有 think loop
-        if message.is_heartbeat or message.has_image:
+        # 心跳消息走原有 think loop
+        if message.is_heartbeat:
             return await self._think_loop(message)
 
         # 流式路径
