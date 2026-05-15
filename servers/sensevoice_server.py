@@ -2,7 +2,7 @@
 
 用法：
     pip install funasr torch torchaudio fastapi uvicorn
-    python sensevoice_server.py
+    python servers/sensevoice_server.py
 
 POST http://localhost:10096/stt
 Body: 16kHz mono 16-bit PCM (raw bytes)

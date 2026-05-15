@@ -364,6 +364,10 @@ qianxue/
 │   ├── state/                  # AI 状态（心情、精力、信心）
 │   └── embedding/              # 向量化（bge-base-zh）
 │
+├── servers/                    # 独立语音服务
+│   ├── sensevoice_server.py    # SenseVoice STT（离线语音识别，:10096）
+│   └── tts_server.py           # FasterQwenTTS（本地语音合成，:8880）
+│
 ├── heartbeat/                  # 心跳服务（触发主动思考）
 ├── tools/                      # 独立工具（screen_capture_agent）
 └── start_all.py / .bat         # 一键启动

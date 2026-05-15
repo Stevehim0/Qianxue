@@ -4,7 +4,7 @@
 0.6B-Base + 预提取 speaker embedding，启动时一次性提取。
 
 用法:
-    HF_ENDPOINT=https://hf-mirror.com python tts_server.py --host 0.0.0.0 --port 8880
+    HF_ENDPOINT=https://hf-mirror.com python servers/tts_server.py --host 0.0.0.0 --port 8880
 """
 
 import argparse
