@@ -66,6 +66,9 @@ Thumbs.db
 vendor/
 
 # TTS server (separate repo, run independently)
+Qwen3-TTS-Openai-Fastapi/
+servers/voice_prompt.pt
+servers/ref_txt.txt
 
 # Test/debug outputs
 *.wav
