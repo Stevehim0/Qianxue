@@ -147,6 +147,8 @@ class VisionConfig:
 class VoiceConfig:
     funasr_websocket_url: str = "ws://localhost:10095"
     funasr_timeout: int = 30
+    stt_backend: str = "funasr"          # STT 引擎: "funasr" (2pass) | "sensevoice" (离线，极快)
+    sensevoice_websocket_url: str = "ws://localhost:10096"
     tts_backend: str = "edge"
     tts_default_voice: str = "zh-CN-XiaoxiaoNeural"
     tts_timeout: int = 30
@@ -452,12 +454,15 @@ class ConfigLoader:
     def _build_voice(self) -> VoiceConfig:
         r = self._raw.get("voice", {})
         funasr = r.get("funasr", {})
+        stt = r.get("stt", {})
         tts = r.get("tts", {})
         audio = r.get("audio", {})
         qwen3 = r.get("qwen3", {})
         return VoiceConfig(
             funasr_websocket_url=funasr.get("websocket_url", "ws://localhost:10095"),
             funasr_timeout=funasr.get("timeout", 30),
+            stt_backend=stt.get("backend", "funasr"),
+            sensevoice_websocket_url=stt.get("sensevoice_url", "ws://localhost:10096"),
             tts_backend=tts.get("backend", "edge"),
             tts_default_voice=tts.get("default_voice", "zh-CN-XiaoxiaoNeural"),
             tts_timeout=tts.get("timeout", 30),

@@ -133,7 +133,6 @@ def get_computer_status() -> dict:
         return {"online": False, "connected_since": None, "duration": None}
     now = datetime.now()
     duration = (now - _connected_since).total_seconds() if _connected_since else 0
-    # 格式化时长
     hours = int(duration // 3600)
     minutes = int((duration % 3600) // 60)
     if hours > 0:
@@ -147,6 +146,96 @@ def get_computer_status() -> dict:
     }
 
 
+# ------------------------------------------------------------------
+# 语音输入消息处理
+# ------------------------------------------------------------------
+
+
+def to_ms(t_start: float, t_end: float) -> int:
+    """两个 monotonic 时间戳之间的毫秒数。"""
+    return int((t_end - t_start) * 1000)
+
+
+async def _handle_voice_start() -> None:
+    """处理 voice_start: 打断当前 TTS + 开始新语音输入."""
+    from backend.services.voice_manager import voice_manager
+
+    # 如果 AI 正在说话，打断
+    if voice_manager.computer_voice_active:
+        await voice_manager.interrupt_computer()
+
+    voice_manager.start_computer_voice()
+    await _send_if_active({"type": "voice_ready"})
+
+
+async def _handle_audio_input(data_b64: str) -> None:
+    """处理 audio_input: 缓冲前端发来的 PCM chunk."""
+    from backend.services.voice_manager import voice_manager
+    try:
+        pcm = base64.b64decode(data_b64)
+        voice_manager.feed_computer_audio(pcm)
+    except Exception as e:
+        logger.warning(f"audio_input 解码失败: {e}")
+
+
+async def _handle_voice_end(data_b64: Optional[str] = None) -> None:
+    """处理 voice_end: 结束语音输入，转写，发送给 Brain."""
+    import time
+    from backend.services.voice_manager import voice_manager
+
+    t0 = time.monotonic()
+
+    # voice_end 携带完整音频：清空之前的 chunk 缓冲，只用完整音频（避免重复）
+    if data_b64:
+        try:
+            pcm = base64.b64decode(data_b64)
+            voice_manager._computer_audio_buffer.clear()
+            voice_manager.feed_computer_audio(pcm)
+        except Exception as e:
+            logger.warning(f"voice_end 音频解码失败: {e}")
+
+    t_decode = time.monotonic()
+    text = await voice_manager.end_computer_voice()
+    t_stt = time.monotonic()
+
+    if not text or not text.strip():
+        logger.info(f"[VOICE_PERF] decode={to_ms(t0,t_decode)}ms stt={to_ms(t_decode,t_stt)}ms → 空结果，丢弃")
+        return
+
+    logger.info(f"[VOICE_PERF] decode={to_ms(t0,t_decode)}ms stt={to_ms(t_decode,t_stt)}ms total={to_ms(t0,t_stt)}ms → {text[:60]}")
+
+    # 通知前端转写结果
+    await _send_if_active({"type": "stt_final", "text": text})
+
+    # 构建 AgentMessage 并发送到对话管道
+    if _message_handler is None:
+        logger.warning("消息处理器未初始化，丢弃语音转写")
+        return
+
+    from backend.services.agent.sources.computer_source import build_computer_message
+    agent_msg = build_computer_message(text)
+    await _message_handler(agent_msg)
+
+
+async def _handle_voice_cancel() -> None:
+    """处理 voice_cancel: 取消当前语音输入."""
+    from backend.services.voice_manager import voice_manager
+    voice_manager.cancel_computer_voice()
+
+
+async def _send_if_active(msg: dict) -> None:
+    """向前端发送 JSON 消息（如果连接活跃）."""
+    if _active_ws is not None:
+        try:
+            await _active_ws.send_json(msg)
+        except Exception:
+            pass
+
+
+# ------------------------------------------------------------------
+# WebSocket 端点
+# ------------------------------------------------------------------
+
 @router.websocket("/ws/computer")
 async def computer_websocket(websocket: WebSocket):
     """本地电脑聊天 WebSocket.
@@ -154,6 +243,10 @@ async def computer_websocket(websocket: WebSocket):
     接收协议:
         {"type": "message", "content": "你好"}
         {"type": "set_voice", "enabled": true/false}
+        {"type": "voice_start"}                          // 全双工: 开始语音输入
+        {"type": "audio_input", "data": "<base64 PCM>"}  // 全双工: 音频 chunk
+        {"type": "voice_end", "data": "<base64 PCM>"}    // 全双工: 结束语音 + 完整音频
+        {"type": "voice_cancel"}                         // 全双工: 取消语音输入
         {"type": "ping"}
 
     推送协议:
@@ -165,6 +258,9 @@ async def computer_websocket(websocket: WebSocket):
         {"type": "audio", "seq": 0, "data": "<base64 mp3>"}  # EdgeTTS 兼容
         {"type": "done"}
         {"type": "pong"}
+        {"type": "voice_ready"}                          // 全双工: STT 就绪
+        {"type": "stt_final", "text": "你好"}            // 全双工: 转写结果
+        {"type": "interrupt_ack"}                        // 全双工: 打断确认
         {"type": "error", "message": "..."}
     """
     global _active_ws, _voice_enabled, _connected_since
@@ -173,7 +269,6 @@ async def computer_websocket(websocket: WebSocket):
     logger.info("电脑前端 WebSocket 已连接")
 
     async with _ws_lock:
-        # 如果已有连接，替换（旧连接由前端自行断开）
         _active_ws = websocket
         _connected_since = datetime.now()
 
@@ -207,6 +302,18 @@ async def computer_websocket(websocket: WebSocket):
                 from backend.services.agent.sources.computer_source import build_computer_message
                 agent_msg = build_computer_message(content)
                 await _message_handler(agent_msg)
+
+            elif msg_type == "voice_start":
+                await _handle_voice_start()
+
+            elif msg_type == "audio_input":
+                await _handle_audio_input(msg.get("data", ""))
+
+            elif msg_type == "voice_end":
+                await _handle_voice_end(msg.get("data"))
+
+            elif msg_type == "voice_cancel":
+                await _handle_voice_cancel()
 
             else:
                 await websocket.send_json({"type": "error", "message": f"未知消息类型: {msg_type}"})

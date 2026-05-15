@@ -52,6 +52,7 @@ from backend.services.sleep_manager import sleep_manager, run_sleep_cycle
 from backend.services.heartbeat_manager import heartbeat_manager
 from backend.services.voice_service import voice_service
 from backend.services.voice_player import voice_player
+from backend.services.voice_manager import voice_manager
 from backend.services.voice_health import check_voice_dependencies
 
 
@@ -141,6 +142,9 @@ async def _graceful_shutdown():
     if voice_player.is_connected():
         await voice_player.disconnect()
         logger.info("VoicePlayer 已断开")
+
+    # 清理语音管理器
+    await voice_manager.close()
 
     # 断开 Discord 连接
     if ds_module.discord_source and ds_module.discord_source.is_connected():
@@ -253,6 +257,9 @@ async def lifespan(app: FastAPI):
 
     # 初始化语音播放器（Phase 18 框架，Phase 20 接入 Discord）
     logger.info(f"语音播放器已初始化: connected={voice_player.is_connected()}")
+
+    # 初始化统一语音管理器
+    logger.info(f"语音管理器已初始化: stt_backend={settings.voice.stt_backend}")
 
     # 初始化 Discord 消息源 — 后台自动连接，不阻塞启动
     import backend.services.agent.sources.discord_source as ds_module

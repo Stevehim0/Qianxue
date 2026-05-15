@@ -19,6 +19,52 @@ logger = logging.getLogger(__name__)
 
 _AT_PATTERN = re.compile(r'@\[(\d+)\]')
 
+# TTS 输入清洗：去掉表情符号、特殊符号、括号内容等 TTS 无法朗读的内容
+_TTS_CLEAN_PATTERN = re.compile(
+    r'[\U0001F600-\U0001F64F'  # emoticons
+    r'\U0001F300-\U0001F5FF'   # symbols & pictographs
+    r'\U0001F680-\U0001F6FF'   # transport & map
+    r'\U0001F1E0-\U0001F1FF'   # flags
+    r'\U00002702-\U000027B0'   # dingbats
+    r'\U0000FE00-\U0000FE0F'   # variation selectors
+    r'\U0001F900-\U0001F9FF'   # supplemental symbols
+    r'\U0001FA00-\U0001FA6F'   # chess symbols
+    r'\U0001FA70-\U0001FAFF'   # symbols extended
+    r'\U00002600-\U000026FF'   # misc symbols
+    r'‍'                  # zero-width joiner
+    r'️'                  # variation selector
+    r'～'                      # 全角波浪
+    r'♪'                       # 音符
+    r'♫'                       # 双音符
+    r'✧'                       # 星号装饰
+    r'★'                       # 实心星
+    r'☆'                       # 空心星
+    r'♡'                       # 空心心
+    r'♥'                       # 实心心
+    r'…'                       # 省略号（替换为逗号）
+    r']+'
+    r'|'
+    r'[\（\(][^）\)]*[\）\)]'  # 括号内容（动作描写等）
+    r'|'
+    r'【[^】]*】'               # 方括号内容
+    r'|'
+    r'〔[^〕]*〕'               # 花括号内容
+    r'|'
+    r'~~[^~]*~~'               # 删除线
+    r'|'
+    r'\*[^*]+\*'               # 星号斜体
+)
+
+
+def _clean_for_tts(text: str) -> str:
+    """清洗 TTS 输入：去掉表情、符号、括号动作描写等。"""
+    text = _TTS_CLEAN_PATTERN.sub('', text)
+    # 省略号 → 逗号（保留停顿）
+    text = text.replace('...', '，').replace('……', '，')
+    # 清理多余空白
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
 # 并发 TTS 上限（单 GPU 并发会导致 RTF > 1.0，流式断裂）
 _MAX_CONCURRENT_TTS = 1
 
@@ -96,6 +142,12 @@ class MessageManager:
                 except asyncio.TimeoutError:
                     logger.warning("end_tts_reply: 等待最后 TTS 任务超时")
 
+    def cancel_current_reply(self):
+        """取消当前 TTS 推送（语音打断时调用）."""
+        self._cancel_batch_timer()
+        self._batch_buf.clear()
+        self._tts_active = False
+
     # ------------------------------------------------------------------
     # 句子攒批
     # ------------------------------------------------------------------
@@ -125,18 +177,18 @@ class MessageManager:
         asyncio.create_task(self._stream_sentence_tts(seq, text))
 
     async def _enqueue_tts(self, text: str):
-        """Computer TTS 入队 — 首句立即合成，后续攒批。
+        """Computer TTS 入队 — 首句立即合成，后续攒批。"""
+        cleaned = _clean_for_tts(text)
+        if not cleaned:
+            return
 
-        首句走独立流式合成以获得最低 TTFB；
-        后续句攒到一起给模型更多文本上下文，语气更连贯。
-        """
         if self._tts_seq == 0:
             # 首句：立即合成
             seq = self._next_tts_seq()
-            asyncio.create_task(self._stream_sentence_tts(seq, text))
+            asyncio.create_task(self._stream_sentence_tts(seq, cleaned))
         else:
             # 后续：攒批
-            self._batch_buf.append(text)
+            self._batch_buf.append(cleaned)
             if len(self._batch_buf) >= _BATCH_MAX:
                 await self._flush_batch()
             else:
@@ -306,12 +358,15 @@ class MessageManager:
     # ------------------------------------------------------------------
 
     async def _send_voice(self, text: str) -> bool:
+        cleaned = _clean_for_tts(text)
+        if not cleaned:
+            return True
         if not self._voice_sentence_queue:
             logger.warning("MessageManager: 语音队列未设置，跳过 TTS")
             return False
         try:
             from backend.services.voice_service import voice_service
-            mp3 = await voice_service.synthesize(text)
+            mp3 = await voice_service.synthesize(cleaned)
             await self._voice_sentence_queue.put(mp3)
             return True
         except Exception as e:
@@ -350,10 +405,13 @@ class MessageManager:
             return False
 
     async def _send_computer_voice(self, text: str) -> bool:
+        cleaned = _clean_for_tts(text)
+        if not cleaned:
+            return True
         try:
             from backend.services.voice_service import voice_service
             from backend.routes.computer_routes import send_audio_to_computer
-            audio = await voice_service.synthesize(text)
+            audio = await voice_service.synthesize(cleaned)
             return await send_audio_to_computer(audio)
         except Exception as e:
             logger.error(f"MessageManager 电脑 TTS 失败: {e}")

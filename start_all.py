@@ -20,6 +20,10 @@ DISCORD_PROXY = os.environ.get("QIANXUE_DISCORD_PROXY", "")
 PYTHON = os.environ.get("QIANXUE_PYTHON", "D:/Miniconda/envs/SpaceX/python.exe")
 
 SERVICES = [
+    # SenseVoice STT — 离线转写，~50ms/句，全双工语音识别
+    {"name": "SenseVoice STT", "tag": "STT", "color": "95", "delay": 0,
+     "cmd": [PYTHON, "sensevoice_server.py"]},
+
     # FasterQwenTTS — CUDA Graphs 加速, RTF ~2.2x, 流式 PCM
     {"name": "FasterQwenTTS", "tag": "TTS", "color": "35", "delay": 0,
      "wsl": True,
@@ -275,7 +279,7 @@ async def shutdown():
     processes.clear()
 
     # 5. 按端口强制清理残留
-    for port in (8000, 8001, 5001, 5002, 8880):
+    for port in (8000, 8001, 5001, 5002, 8880, 10096):
         try:
             result = subprocess.run(
                 f'netstat -ano | findstr ":{port} " | findstr LISTENING',
@@ -313,6 +317,7 @@ async def main():
   Memory API:   http://localhost:8001
   Memory Web:   http://localhost:5001
   Qwen3-TTS:    http://localhost:8880
+  SenseVoice:   ws://localhost:10096
   Local Chat:   http://localhost:8000/chat
   Press Ctrl+C to stop all services\033[0m
 """)

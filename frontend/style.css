@@ -74,6 +74,41 @@ header h1 {
     opacity: 1;
 }
 
+.mic-toggle {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.mic-toggle input {
+    display: none;
+}
+
+.mic-icon {
+    font-size: 18px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.mic-toggle input:checked + .mic-icon {
+    opacity: 1;
+}
+
+.mic-active .mic-icon {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.message.stt-partial {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.7;
+}
+
 #chat-container {
     flex: 1;
     overflow-y: auto;

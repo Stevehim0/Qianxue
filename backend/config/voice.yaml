@@ -5,6 +5,10 @@ funasr:
   websocket_url: "ws://localhost:10095"     # FunASR Server WebSocket 地址
   timeout: 30                                # ASR 调用超时（秒）
 
+stt:
+  backend: "sensevoice"                      # STT 引擎: "funasr" (2pass 流式) | "sensevoice" (离线，极快 ~50ms)
+  sensevoice_url: "ws://localhost:10096"     # SenseVoice FunASR 离线服务地址
+
 tts:
   backend: "qwen3"                            # TTS 引擎: "edge" (Edge TTS 云端) | "qwen3" (Qwen3-TTS 本地，WSL2+GPU)
   default_voice: "zh-CN-XiaoxiaoNeural"      # Edge-TTS 默认音色
